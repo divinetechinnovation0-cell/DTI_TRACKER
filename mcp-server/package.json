@@ -1,0 +1,14 @@
+{
+  "name": "dti-tracker-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for DTI Performance Tracker — lets Claude read/write team data",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@supabase/supabase-js": "^2.49.4"
+  }
+}

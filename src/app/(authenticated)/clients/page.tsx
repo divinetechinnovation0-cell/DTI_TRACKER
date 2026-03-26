@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 import { Plus, Building2, Phone, Mail, User, Pencil, X, Check, Trash2 } from 'lucide-react'
 import { SERVICE_CATEGORIES } from '@/lib/types'
 import type { Client } from '@/lib/types'
@@ -288,7 +289,9 @@ export default function ClientsPage() {
             >
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h3 className="font-semibold">{client.name}</h3>
+                  <Link href={`/clients/${client.id}`} className="font-semibold hover:text-blue-600 transition">
+                    {client.name}
+                  </Link>
                   <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1 ${STATUS_STYLES[client.status] || ''}`}>
                     {client.status}
                   </span>

@@ -26,7 +26,7 @@ export default async function AuthenticatedLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation isAdmin={teamMember.is_admin} />
+      <Navigation isAdmin={teamMember.is_admin} memberName={teamMember.name} memberId={teamMember.id} />
       <main className="md:ml-56 pb-20 md:pb-6 p-4 md:p-6">
         {children}
       </main>

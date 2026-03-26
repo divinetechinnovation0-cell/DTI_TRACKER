@@ -21,6 +21,7 @@ export type Client = {
   contact_email: string | null
   contact_phone: string | null
   notes: string | null
+  color: string
   created_at: string
   updated_at: string
 }
@@ -35,9 +36,8 @@ export type WorkLog = {
   service_category: string
   description: string
   created_at: string
-  // Joined fields
-  team_member?: TeamMember
-  client?: Client
+  team_member?: { name: string; monthly_salary?: number }
+  client?: { name: string; color?: string }
 }
 
 export type Attendance = {
@@ -46,8 +46,9 @@ export type Attendance = {
   date: string
   status: 'present' | 'absent' | 'half_day' | 'leave'
   note: string | null
+  check_in_time: string | null
   created_at: string
-  team_member?: TeamMember
+  team_member?: { name: string }
 }
 
 export type Expense = {
@@ -60,8 +61,93 @@ export type Expense = {
   description: string
   date: string
   created_at: string
-  client?: Client
-  recorder?: TeamMember
+  client?: { name: string }
+  recorder?: { name: string }
+}
+
+export type Task = {
+  id: string
+  title: string
+  description: string
+  client_id: string | null
+  assigned_to: string
+  assigned_by: string
+  status: 'open' | 'done'
+  priority: 'normal' | 'urgent'
+  due_date: string | null
+  is_weekly_goal: boolean
+  week_start: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+  assignee?: { name: string }
+  assigner?: { name: string }
+  client?: { name: string; color?: string }
+}
+
+export type Notification = {
+  id: string
+  recipient_id: string
+  sender_id: string | null
+  type: 'task_assigned' | 'task_done' | 'ping' | 'reminder' | 'system'
+  title: string
+  body: string
+  task_id: string | null
+  link: string
+  is_read: boolean
+  created_at: string
+  sender?: { name: string }
+}
+
+export type ClientPackage = {
+  id: string
+  client_id: string
+  service_category: string
+  quantity_promised: number
+  unit: string
+  hours_budgeted: number
+  price_npr: number
+  billing_cycle: 'monthly' | 'quarterly' | 'one_time'
+  start_date: string
+  end_date: string | null
+  is_active: boolean
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export type ClientDeliverable = {
+  id: string
+  package_id: string | null
+  client_id: string
+  title: string
+  status: 'pending' | 'in_progress' | 'review' | 'delivered' | 'cancelled'
+  assigned_to: string | null
+  due_date: string | null
+  delivery_date: string | null
+  month: string | null
+  notes: string
+  created_at: string
+  updated_at: string
+  assignee?: { name: string }
+}
+
+export type ContentCalendar = {
+  id: string
+  client_id: string
+  title: string
+  content_type: string
+  platform: string | null
+  scheduled_date: string
+  scheduled_time: string | null
+  status: 'idea' | 'planned' | 'in_production' | 'ready' | 'published' | 'cancelled'
+  assigned_to: string | null
+  description: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  client?: { name: string; color?: string }
+  assignee?: { name: string }
 }
 
 export const SERVICE_CATEGORIES = [
@@ -102,3 +188,43 @@ export const COST_TYPES = [
   { value: 'acquisition', label: 'Acquisition' },
   { value: 'overhead', label: 'Overhead' },
 ] as const
+
+export const CONTENT_TYPES = [
+  { value: 'social_post', label: 'Social Post' },
+  { value: 'reel', label: 'Reel' },
+  { value: 'story', label: 'Story' },
+  { value: 'blog', label: 'Blog' },
+  { value: 'email_campaign', label: 'Email Campaign' },
+  { value: 'ad_creative', label: 'Ad Creative' },
+  { value: 'video', label: 'Video' },
+  { value: 'shoot', label: 'Shoot' },
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'deadline', label: 'Deadline' },
+  { value: 'other', label: 'Other' },
+] as const
+
+export const PLATFORMS = [
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'website', label: 'Website' },
+  { value: 'email', label: 'Email' },
+  { value: 'google_ads', label: 'Google Ads' },
+  { value: 'meta_ads', label: 'Meta Ads' },
+  { value: 'other', label: 'Other' },
+] as const
+
+export const DELIVERABLE_STATUSES = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'review', label: 'Review' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'cancelled', label: 'Cancelled' },
+] as const
+
+export const getCategoryLabel = (val: string) =>
+  SERVICE_CATEGORIES.find(c => c.value === val)?.label || val
+
+export const fmtNPR = (n: number) => `रू ${Math.round(n).toLocaleString()}`
