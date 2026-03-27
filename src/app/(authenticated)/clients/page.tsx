@@ -3,9 +3,17 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { Plus, Building2, Phone, Mail, User, Pencil, X, Check, Trash2 } from 'lucide-react'
+import { Plus, Building2, Phone, Mail, User, Pencil, X, Check, Trash2, Package } from 'lucide-react'
 import { SERVICE_CATEGORIES } from '@/lib/types'
 import type { Client } from '@/lib/types'
+
+type ClientPackage = {
+  id: string
+  client_id: string
+  service_category: string
+  quantity_promised: number
+  unit: string
+}
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
@@ -16,6 +24,7 @@ const STATUS_STYLES: Record<string, string> = {
 export default function ClientsPage() {
   const supabase = createClient()
   const [clients, setClients] = useState<Client[]>([])
+  const [packages, setPackages] = useState<ClientPackage[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -49,12 +58,12 @@ export default function ClientsPage() {
 
   async function fetchClients() {
     setLoading(true)
-    const { data } = await supabase
-      .from('clients')
-      .select('*')
-      .order('status')
-      .order('name')
-    if (data) setClients(data)
+    const [{ data: clientData }, { data: pkgData }] = await Promise.all([
+      supabase.from('clients').select('*').order('status').order('name'),
+      supabase.from('client_packages').select('id,client_id,service_category,quantity_promised,unit').eq('is_active', true),
+    ])
+    if (clientData) setClients(clientData)
+    if (pkgData) setPackages(pkgData)
     setLoading(false)
   }
 
@@ -335,15 +344,30 @@ export default function ClientsPage() {
                 )}
               </div>
 
-              {client.services && client.services.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {client.services.map((s) => (
-                    <span key={s} className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
-                      {getCategoryLabel(s)}
-                    </span>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const clientPkgs = packages.filter(p => p.client_id === client.id)
+                if (clientPkgs.length === 0) return null
+                return (
+                  <div className="mb-3 mt-1">
+                    <div className="flex items-center gap-1 mb-1.5">
+                      <Package className="w-3 h-3 text-gray-400" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Monthly Package</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {clientPkgs.map(pkg => (
+                        <span
+                          key={pkg.id}
+                          className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border"
+                          style={{ borderColor: client.color + '40', backgroundColor: client.color + '12', color: client.color }}
+                        >
+                          <span className="font-bold">{pkg.quantity_promised}×</span>
+                          {pkg.unit}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
 
               <div className="flex flex-wrap gap-3 text-xs text-gray-500">
                 {client.contact_person && (

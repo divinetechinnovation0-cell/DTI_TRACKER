@@ -159,6 +159,7 @@ export const SERVICE_CATEGORIES = [
   { value: 'graphics', label: 'Graphics Design' },
   { value: 'video_shooting', label: 'Video Shooting' },
   { value: 'video_editing', label: 'Video Editing' },
+  { value: 'photo_shoot', label: 'Photoshoot' },
   { value: 'web_dev', label: 'Web Development' },
   { value: 'app_dev', label: 'App Development' },
   { value: 'client_management', label: 'Client Management' },

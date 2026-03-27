@@ -17,10 +17,13 @@ import {
   Plus,
   Circle,
   CheckCircle2,
+  Check,
   X,
   Target,
   ListTodo,
   Users,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
 import type { Task, Client, TeamMember } from '@/lib/types'
 
@@ -44,6 +47,8 @@ export default function TasksPage() {
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
   // Form state
   const [formTitle, setFormTitle] = useState('')
@@ -142,6 +147,35 @@ export default function TasksPage() {
     setTogglingId(null)
   }
 
+  const resetForm = () => {
+    setFormTitle('')
+    setFormAssignedTo(memberId || '')
+    setFormDueDate(format(new Date(), 'yyyy-MM-dd'))
+    setFormClientId('')
+    setFormPriority('normal')
+    setFormIsWeeklyGoal(false)
+    setEditingTaskId(null)
+    setShowForm(false)
+  }
+
+  const startEditTask = (task: TaskWithJoins) => {
+    setFormTitle(task.title)
+    setFormAssignedTo(task.assigned_to || memberId || '')
+    setFormDueDate(task.due_date || format(new Date(), 'yyyy-MM-dd'))
+    setFormClientId(task.client_id || '')
+    setFormPriority(task.priority as 'normal' | 'urgent')
+    setFormIsWeeklyGoal(task.is_weekly_goal || false)
+    setEditingTaskId(task.id)
+    setShowForm(true)
+    setDeleteConfirmId(null)
+  }
+
+  const handleDeleteTask = async (id: string) => {
+    await supabase.from('tasks').delete().eq('id', id)
+    setDeleteConfirmId(null)
+    fetchTasks()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!memberId || !formTitle.trim()) return
@@ -154,25 +188,19 @@ export default function TasksPage() {
     const entry: Record<string, unknown> = {
       title: formTitle.trim(),
       assigned_to: isAdmin ? formAssignedTo : memberId,
-      assigned_by: memberId,
       due_date: formDueDate || null,
       client_id: formClientId || null,
       priority: formPriority,
       is_weekly_goal: formIsWeeklyGoal,
       week_start: weekStart,
-      status: 'open',
     }
 
-    const { error } = await supabase.from('tasks').insert(entry)
-    if (!error) {
-      setFormTitle('')
-      setFormAssignedTo(memberId)
-      setFormDueDate(format(new Date(), 'yyyy-MM-dd'))
-      setFormClientId('')
-      setFormPriority('normal')
-      setFormIsWeeklyGoal(false)
-      setShowForm(false)
-      fetchTasks()
+    if (editingTaskId) {
+      const { error } = await supabase.from('tasks').update(entry).eq('id', editingTaskId)
+      if (!error) { resetForm(); fetchTasks() }
+    } else {
+      const { error } = await supabase.from('tasks').insert({ ...entry, assigned_by: memberId, status: 'open' })
+      if (!error) { resetForm(); fetchTasks() }
     }
     setSubmitting(false)
   }
@@ -280,6 +308,44 @@ export default function TasksPage() {
             )}
           </div>
         </div>
+
+        {/* Edit / Delete actions */}
+        <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
+          {deleteConfirmId === task.id ? (
+            <>
+              <button
+                onClick={() => handleDeleteTask(task.id)}
+                className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition text-xs font-medium"
+                title="Confirm delete"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => startEditTask(task)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-300 hover:text-blue-500 transition"
+                title="Edit task"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setDeleteConfirmId(task.id)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-300 hover:text-red-500 transition"
+                title="Delete task"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
     )
   }
@@ -352,8 +418,8 @@ export default function TasksPage() {
       {showForm && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">New Task</h2>
-            <button onClick={() => setShowForm(false)} className="p-1 hover:bg-gray-100 rounded-lg transition">
+            <h2 className="text-sm font-semibold">{editingTaskId ? 'Edit Task' : 'New Task'}</h2>
+            <button onClick={resetForm} className="p-1 hover:bg-gray-100 rounded-lg transition">
               <X className="w-4 h-4 text-gray-500" />
             </button>
           </div>
@@ -490,7 +556,7 @@ export default function TasksPage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={resetForm}
                 className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
               >
                 Cancel
@@ -500,7 +566,7 @@ export default function TasksPage() {
                 disabled={submitting || !formTitle.trim()}
                 className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50"
               >
-                {submitting ? 'Creating...' : 'Create Task'}
+                {submitting ? 'Saving...' : editingTaskId ? 'Update Task' : 'Create Task'}
               </button>
             </div>
           </form>

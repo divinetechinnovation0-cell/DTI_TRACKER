@@ -28,6 +28,9 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  Pencil,
+  Trash2,
+  Check,
 } from 'lucide-react'
 import type { ContentCalendar, Client, TeamMember } from '@/lib/types'
 import { CONTENT_TYPES, PLATFORMS } from '@/lib/types'
@@ -72,6 +75,8 @@ export default function CalendarPage() {
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [expandedMobileDay, setExpandedMobileDay] = useState<string>(
     format(new Date(), 'yyyy-MM-dd')
   )
@@ -192,6 +197,26 @@ export default function CalendarPage() {
     setFormDescription('')
   }
 
+  const startEditEntry = (entry: ContentEntry) => {
+    setFormTitle(entry.title)
+    setFormClientId(entry.client_id)
+    setFormContentType(entry.content_type)
+    setFormPlatform(entry.platform || '')
+    setFormDate(entry.scheduled_date)
+    setFormTime(entry.scheduled_time || '')
+    setFormAssignedTo(entry.assigned_to || '')
+    setFormDescription(entry.description || '')
+    setEditingEntryId(entry.id)
+    setShowForm(true)
+    setDeleteConfirmId(null)
+  }
+
+  const handleDeleteEntry = async (id: string) => {
+    await supabase.from('content_calendar').delete().eq('id', id)
+    setDeleteConfirmId(null)
+    fetchData()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formClientId || !formTitle || !formContentType) return
@@ -202,19 +227,20 @@ export default function CalendarPage() {
       title: formTitle,
       content_type: formContentType,
       scheduled_date: formDate,
-      status: 'planned',
       description: formDescription || '',
+      platform: formPlatform || null,
+      scheduled_time: formTime || null,
+      assigned_to: formAssignedTo || null,
     }
-    if (formPlatform) payload.platform = formPlatform
-    if (formTime) payload.scheduled_time = formTime
-    if (formAssignedTo) payload.assigned_to = formAssignedTo
-    if (memberId) payload.created_by = memberId
 
-    const { error } = await supabase.from('content_calendar').insert(payload)
-    if (!error) {
-      resetForm()
-      setShowForm(false)
-      fetchData()
+    if (editingEntryId) {
+      const { error } = await supabase.from('content_calendar').update(payload).eq('id', editingEntryId)
+      if (!error) { resetForm(); setEditingEntryId(null); setShowForm(false); fetchData() }
+    } else {
+      if (memberId) payload.created_by = memberId
+      payload.status = 'planned'
+      const { error } = await supabase.from('content_calendar').insert(payload)
+      if (!error) { resetForm(); setShowForm(false); fetchData() }
     }
     setSubmitting(false)
   }
@@ -291,6 +317,7 @@ export default function CalendarPage() {
           <button
             onClick={() => {
               resetForm()
+              setEditingEntryId(null)
               setShowForm(true)
             }}
             className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
@@ -373,10 +400,10 @@ export default function CalendarPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-sm text-gray-700">
-              Add Content Entry
+              {editingEntryId ? 'Edit Entry' : 'Add Content Entry'}
             </h3>
             <button
-              onClick={() => setShowForm(false)}
+              onClick={() => { resetForm(); setEditingEntryId(null); setShowForm(false) }}
               className="p-1 hover:bg-gray-100 rounded-lg"
             >
               <X className="w-4 h-4 text-gray-400" />
@@ -555,7 +582,7 @@ export default function CalendarPage() {
                 disabled={submitting || !formClientId || !formContentType}
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50"
               >
-                {submitting ? 'Saving...' : 'Add Entry'}
+                {submitting ? 'Saving...' : editingEntryId ? 'Update Entry' : 'Add Entry'}
               </button>
             </div>
           </form>
@@ -606,15 +633,28 @@ export default function CalendarPage() {
                     {dayEntries.map((entry) => (
                       <div
                         key={entry.id}
-                        className="rounded-lg p-1.5 text-xs bg-white border border-gray-100"
+                        className="rounded-lg p-1.5 text-xs bg-white border border-gray-100 group"
                         style={{
                           borderLeftWidth: '3px',
                           borderLeftColor:
                             entry.client?.color || '#6B7280',
                         }}
                       >
-                        <div className="font-medium text-gray-800 truncate">
-                          {entry.title}
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="font-medium text-gray-800 truncate flex-1">{entry.title}</div>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
+                            {deleteConfirmId === entry.id ? (
+                              <>
+                                <button onClick={() => handleDeleteEntry(entry.id)} className="p-0.5 rounded bg-red-50 text-red-500"><Check className="w-3 h-3" /></button>
+                                <button onClick={() => setDeleteConfirmId(null)} className="p-0.5 rounded hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => startEditEntry(entry)} className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-500"><Pencil className="w-3 h-3" /></button>
+                                <button onClick={() => setDeleteConfirmId(entry.id)} className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
+                              </>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
                           {entry.assignee?.name && (
@@ -806,7 +846,7 @@ export default function CalendarPage() {
                 <button
                   key={key}
                   onClick={() => setSelectedDay(isSelected ? null : key)}
-                  className={`rounded-lg border p-1.5 min-h-[60px] md:min-h-[80px] text-left transition ${
+                  className={`rounded-lg border p-1.5 min-h-[70px] md:min-h-[90px] text-left transition overflow-hidden ${
                     isSelected
                       ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-200'
                       : today
@@ -828,20 +868,21 @@ export default function CalendarPage() {
                     {format(day, 'd')}
                   </span>
                   {dayEntries.length > 0 && (
-                    <div className="flex flex-wrap gap-0.5 mt-1">
-                      {dayEntries.slice(0, 4).map((e) => (
-                        <span
+                    <div className="mt-1 space-y-0.5">
+                      {dayEntries.slice(0, 2).map((e) => (
+                        <div
                           key={e.id}
-                          className="w-2 h-2 rounded-full"
-                          style={{
-                            backgroundColor: e.client?.color || '#6B7280',
-                          }}
-                        />
+                          className="text-[10px] leading-tight px-1 py-0.5 rounded truncate font-medium text-white"
+                          style={{ backgroundColor: e.client?.color || '#6B7280' }}
+                          title={e.title}
+                        >
+                          {e.title}
+                        </div>
                       ))}
-                      {dayEntries.length > 4 && (
-                        <span className="text-[9px] text-gray-400 leading-none">
-                          +{dayEntries.length - 4}
-                        </span>
+                      {dayEntries.length > 2 && (
+                        <div className="text-[9px] text-gray-400 pl-0.5 font-medium">
+                          +{dayEntries.length - 2} more
+                        </div>
                       )}
                     </div>
                   )}
@@ -872,8 +913,8 @@ export default function CalendarPage() {
                         borderLeftColor: entry.client?.color || '#6B7280',
                       }}
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm text-gray-800">
                             {entry.title}
                           </div>
@@ -899,13 +940,34 @@ export default function CalendarPage() {
                               </span>
                             )}
                           </div>
+                          {entry.description && (
+                            <p className="text-xs text-gray-400 mt-1.5">
+                              {entry.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                          {deleteConfirmId === entry.id ? (
+                            <>
+                              <button onClick={() => handleDeleteEntry(entry.id)} className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition" title="Confirm delete">
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => setDeleteConfirmId(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => startEditEntry(entry)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-300 hover:text-blue-500 transition" title="Edit">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => setDeleteConfirmId(entry.id)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-300 hover:text-red-500 transition" title="Delete">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
-                      {entry.description && (
-                        <p className="text-xs text-gray-400 mt-1.5">
-                          {entry.description}
-                        </p>
-                      )}
                     </div>
                   ))}
                   {(workLogsByDate[selectedDay] || []).map((wl) => (

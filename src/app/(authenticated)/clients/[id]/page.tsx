@@ -21,6 +21,8 @@ import {
   User,
   Plus,
   X,
+  Check,
+  Trash2,
   ChevronDown,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -99,6 +101,9 @@ export default function ClientDetailPage() {
   const [showDeliverableForm, setShowDeliverableForm] = useState(false)
   const [showPackageForm, setShowPackageForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [deleteConfirmDelId, setDeleteConfirmDelId] = useState<string | null>(null)
+  const [deleteConfirmExpId, setDeleteConfirmExpId] = useState<string | null>(null)
+  const [deleteConfirmPkgId, setDeleteConfirmPkgId] = useState<string | null>(null)
 
   // Deliverable form
   const [delTitle, setDelTitle] = useState('')
@@ -328,6 +333,25 @@ export default function ClientDetailPage() {
     }
     await supabase.from('client_deliverables').update(update).eq('id', id)
     fetchDeliverables()
+  }
+
+  const handleDeleteDeliverable = async (id: string) => {
+    await supabase.from('client_deliverables').delete().eq('id', id)
+    setDeleteConfirmDelId(null)
+    fetchDeliverables()
+  }
+
+  const handleDeleteExpense = async (id: string) => {
+    await supabase.from('expenses').delete().eq('id', id)
+    setDeleteConfirmExpId(null)
+    fetchExpenses()
+    computeStats()
+  }
+
+  const handleDeletePackage = async (id: string) => {
+    await supabase.from('client_packages').delete().eq('id', id)
+    setDeleteConfirmPkgId(null)
+    fetchPackages()
   }
 
   const resetPackageForm = () => {
@@ -758,11 +782,23 @@ export default function ClientDetailPage() {
                         )}
                       </div>
                     </div>
-                    {del.due_date && (
-                      <span className="text-xs text-gray-400">
-                        Due {format(parseISO(del.due_date), 'MMM d')}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {del.due_date && (
+                        <span className="text-xs text-gray-400">
+                          Due {format(parseISO(del.due_date), 'MMM d')}
+                        </span>
+                      )}
+                      {isAdmin && (
+                        deleteConfirmDelId === del.id ? (
+                          <div className="flex gap-1">
+                            <button onClick={() => handleDeleteDeliverable(del.id)} className="p-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition"><Check className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => setDeleteConfirmDelId(null)} className="p-1 rounded hover:bg-gray-100 text-gray-400 transition"><X className="w-3.5 h-3.5" /></button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setDeleteConfirmDelId(del.id)} className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-red-500 transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -806,9 +842,21 @@ export default function ClientDetailPage() {
                         </p>
                       )}
                     </div>
-                    <span className="text-xs text-gray-400">
-                      {format(parseISO(exp.date), 'MMM d, yyyy')}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">
+                        {format(parseISO(exp.date), 'MMM d, yyyy')}
+                      </span>
+                      {isAdmin && (
+                        deleteConfirmExpId === exp.id ? (
+                          <div className="flex gap-1">
+                            <button onClick={() => handleDeleteExpense(exp.id)} className="p-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition"><Check className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => setDeleteConfirmExpId(null)} className="p-1 rounded hover:bg-gray-100 text-gray-400 transition"><X className="w-3.5 h-3.5" /></button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setDeleteConfirmExpId(exp.id)} className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-red-500 transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1030,12 +1078,17 @@ export default function ClientDetailPage() {
                           </span>
                         </div>
                       </div>
-                      <button
-                        onClick={() => startEditPackage(pkg)}
-                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        Edit
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => startEditPackage(pkg)} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 rounded hover:bg-blue-50 transition">Edit</button>
+                        {deleteConfirmPkgId === pkg.id ? (
+                          <>
+                            <button onClick={() => handleDeletePackage(pkg.id)} className="p-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition"><Check className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => setDeleteConfirmPkgId(null)} className="p-1 rounded hover:bg-gray-100 text-gray-400 transition"><X className="w-3.5 h-3.5" /></button>
+                          </>
+                        ) : (
+                          <button onClick={() => setDeleteConfirmPkgId(pkg.id)} className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-red-500 transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Progress bar */}
