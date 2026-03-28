@@ -187,7 +187,7 @@ export default function TasksPage() {
 
     const entry: Record<string, unknown> = {
       title: formTitle.trim(),
-      assigned_to: isAdmin ? formAssignedTo : memberId,
+      assigned_to: formAssignedTo,
       due_date: formDueDate || null,
       client_id: formClientId || null,
       priority: formPriority,
@@ -446,17 +446,11 @@ export default function TasksPage() {
                   <button
                     key={m.id}
                     type="button"
-                    onClick={() => {
-                      if (isAdmin) {
-                        setFormAssignedTo(m.id)
-                      }
-                    }}
+                    onClick={() => setFormAssignedTo(m.id)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
                       formAssignedTo === m.id
                         ? 'bg-blue-600 text-white'
-                        : isAdmin
-                          ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          : 'bg-gray-50 text-gray-400 cursor-default'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     {m.name}

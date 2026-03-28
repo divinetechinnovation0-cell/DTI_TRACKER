@@ -97,8 +97,8 @@ export default function CalendarPage() {
   // Form state
   const [formTitle, setFormTitle] = useState('')
   const [formClientId, setFormClientId] = useState('')
-  const [formContentType, setFormContentType] = useState('')
-  const [formPlatform, setFormPlatform] = useState('')
+  const [formContentTypes, setFormContentTypes] = useState<string[]>([])
+  const [formPlatforms, setFormPlatforms] = useState<string[]>([])
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [formTime, setFormTime] = useState('')
   const [formAssignedTo, setFormAssignedTo] = useState('')
@@ -217,8 +217,8 @@ export default function CalendarPage() {
   const resetForm = () => {
     setFormTitle('')
     setFormClientId('')
-    setFormContentType('')
-    setFormPlatform('')
+    setFormContentTypes([])
+    setFormPlatforms([])
     setFormDate(format(new Date(), 'yyyy-MM-dd'))
     setFormTime('')
     setFormAssignedTo('')
@@ -228,8 +228,8 @@ export default function CalendarPage() {
   const startEditEntry = (entry: ContentEntry) => {
     setFormTitle(entry.title)
     setFormClientId(entry.client_id)
-    setFormContentType(entry.content_type)
-    setFormPlatform(entry.platform || '')
+    setFormContentTypes(entry.content_type ? entry.content_type.split(',') : [])
+    setFormPlatforms(entry.platform ? entry.platform.split(',') : [])
     setFormDate(entry.scheduled_date)
     setFormTime(entry.scheduled_time || '')
     setFormAssignedTo(entry.assigned_to || '')
@@ -247,16 +247,16 @@ export default function CalendarPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formClientId || !formTitle || !formContentType) return
+    if (!formClientId || !formTitle || formContentTypes.length === 0) return
     setSubmitting(true)
 
     const payload: Record<string, unknown> = {
       client_id: formClientId,
       title: formTitle,
-      content_type: formContentType,
+      content_type: formContentTypes.join(','),
       scheduled_date: formDate,
       description: formDescription || '',
-      platform: formPlatform || null,
+      platform: formPlatforms.length > 0 ? formPlatforms.join(',') : null,
       scheduled_time: formTime || null,
       assigned_to: formAssignedTo || null,
     }
@@ -319,7 +319,10 @@ export default function CalendarPage() {
   }, [view, currentDate, bsYear, bsMonth])
 
   const getContentTypeLabel = (val: string) =>
-    CONTENT_TYPES.find((c) => c.value === val)?.label || val
+    val.split(',').map((v) => CONTENT_TYPES.find((c) => c.value === v.trim())?.label || v.trim()).join(', ')
+
+  const getPlatformLabel = (val: string) =>
+    val.split(',').map((v) => PLATFORMS.find((p) => p.value === v.trim())?.label || v.trim()).join(', ')
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -488,51 +491,67 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Content type chips */}
+            {/* Content type chips (multi-select) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Content Type <span className="text-red-500">*</span>
               </label>
               <div className="flex flex-wrap gap-2">
-                {CONTENT_TYPES.map((ct) => (
-                  <button
-                    key={ct.value}
-                    type="button"
-                    onClick={() => setFormContentType(ct.value)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                      formContentType === ct.value
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {ct.label}
-                  </button>
-                ))}
+                {CONTENT_TYPES.map((ct) => {
+                  const selected = formContentTypes.includes(ct.value)
+                  return (
+                    <button
+                      key={ct.value}
+                      type="button"
+                      onClick={() =>
+                        setFormContentTypes((prev) =>
+                          selected
+                            ? prev.filter((v) => v !== ct.value)
+                            : [...prev, ct.value]
+                        )
+                      }
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                        selected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {ct.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            {/* Platform chips */}
+            {/* Platform chips (multi-select) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Platform (optional)
               </label>
               <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map((p) => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={() =>
-                      setFormPlatform(formPlatform === p.value ? '' : p.value)
-                    }
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                      formPlatform === p.value
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+                {PLATFORMS.map((p) => {
+                  const selected = formPlatforms.includes(p.value)
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() =>
+                        setFormPlatforms((prev) =>
+                          selected
+                            ? prev.filter((v) => v !== p.value)
+                            : [...prev, p.value]
+                        )
+                      }
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                        selected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -615,7 +634,7 @@ export default function CalendarPage() {
               </button>
               <button
                 type="submit"
-                disabled={submitting || !formClientId || !formContentType}
+                disabled={submitting || !formClientId || formContentTypes.length === 0}
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50"
               >
                 {submitting ? 'Saving...' : editingEntryId ? 'Update Entry' : 'Add Entry'}
@@ -965,9 +984,7 @@ export default function CalendarPage() {
                             </span>
                             {entry.platform && (
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded">
-                                {PLATFORMS.find(
-                                  (p) => p.value === entry.platform
-                                )?.label || entry.platform}
+                                {getPlatformLabel(entry.platform)}
                               </span>
                             )}
                             {entry.assignee?.name && (
