@@ -4,6 +4,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, isAf
 import { Clock, Receipt, Building2, Users, ArrowRight, AlertTriangle, Zap, CalendarCheck } from 'lucide-react'
 import Link from 'next/link'
 import { fmtNPR, getCategoryLabel } from '@/lib/types'
+import { formatBSFull, formatBSMonthYear } from '@/lib/nepali-date'
 
 function getGreeting(): string {
   const hour = new Date().getHours()
@@ -130,7 +131,7 @@ export default async function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
             {greeting}, {firstName}
           </h1>
-          <p className="text-gray-500 text-sm mt-1">{format(now, 'EEEE, MMMM d, yyyy')}</p>
+          <p className="text-gray-500 text-sm mt-1">{formatBSFull(now)}</p>
         </div>
 
         {/* Today's Pulse */}
@@ -180,7 +181,7 @@ export default async function DashboardPage() {
               <span className="text-xs text-gray-500 font-medium">Team Hours</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">{totalHours}h</div>
-            <div className="text-xs text-gray-400 mt-1">{format(now, 'MMM yyyy')}</div>
+            <div className="text-xs text-gray-400 mt-1">{formatBSMonthYear(now)}</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -188,7 +189,7 @@ export default async function DashboardPage() {
               <span className="text-xs text-gray-500 font-medium">Total Expenses</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">{fmtNPR(totalExpenses)}</div>
-            <div className="text-xs text-gray-400 mt-1">{format(now, 'MMM yyyy')}</div>
+            <div className="text-xs text-gray-400 mt-1">{formatBSMonthYear(now)}</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -209,7 +210,7 @@ export default async function DashboardPage() {
         {/* Client Costs Table */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900">Client Costs &mdash; {format(now, 'MMM yyyy')}</h2>
+            <h2 className="font-semibold text-gray-900">Client Costs &mdash; {formatBSMonthYear(now)}</h2>
             <Link href="/clients" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
               View all <ArrowRight className="w-3 h-3" />
             </Link>
@@ -394,7 +395,7 @@ export default async function DashboardPage() {
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
           {greeting}, {firstName}
         </h1>
-        <p className="text-gray-500 text-sm mt-1">{format(now, 'EEEE, MMMM d, yyyy')}</p>
+        <p className="text-gray-500 text-sm mt-1">{formatBSFull(now)}</p>
       </div>
 
       {/* Quick Actions */}

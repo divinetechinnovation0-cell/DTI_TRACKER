@@ -4,20 +4,15 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   format,
-  parseISO,
   startOfWeek,
   endOfWeek,
-  startOfMonth,
-  endOfMonth,
-  addWeeks,
-  subWeeks,
-  addMonths,
-  subMonths,
   eachDayOfInterval,
   isSameDay,
   isToday,
   getDay,
-  isSameMonth,
+  addWeeks,
+  subWeeks,
+  parseISO,
 } from 'date-fns'
 import {
   Plus,
@@ -34,6 +29,19 @@ import {
 } from 'lucide-react'
 import type { ContentCalendar, Client, TeamMember } from '@/lib/types'
 import { CONTENT_TYPES, PLATFORMS } from '@/lib/types'
+import {
+  getBSComponents,
+  getBSDay,
+  getBSDaysInMonth,
+  getADDateForBSMonthStart,
+  getADDateForBSMonthEnd,
+  nextBSMonth,
+  prevBSMonth,
+  isSameBSMonth,
+  formatBSWeekRange,
+  formatBSDayDetail,
+  BS_MONTHS,
+} from '@/lib/nepali-date'
 
 type ContentEntry = ContentCalendar & {
   client?: { name: string; color?: string }
@@ -82,6 +90,10 @@ export default function CalendarPage() {
   )
   const [memberId, setMemberId] = useState<string | null>(null)
 
+  // BS month/year for month view navigation
+  const [bsYear, setBsYear] = useState(() => getBSComponents(new Date()).year)
+  const [bsMonth, setBsMonth] = useState(() => getBSComponents(new Date()).month)
+
   // Form state
   const [formTitle, setFormTitle] = useState('')
   const [formClientId, setFormClientId] = useState('')
@@ -123,17 +135,19 @@ export default function CalendarPage() {
     init()
   }, [])
 
+  // Date range for data fetching
   const dateRange = useMemo(() => {
     if (view === 'week') {
       const start = startOfWeek(currentDate, { weekStartsOn: 1 })
       const end = endOfWeek(currentDate, { weekStartsOn: 1 })
       return { start, end }
     } else {
-      const start = startOfMonth(currentDate)
-      const end = endOfMonth(currentDate)
+      // For BS month view, get the AD range covering the full BS month
+      const start = getADDateForBSMonthStart(bsYear, bsMonth)
+      const end = getADDateForBSMonthEnd(bsYear, bsMonth)
       return { start, end }
     }
-  }, [currentDate, view])
+  }, [currentDate, view, bsYear, bsMonth])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -180,11 +194,25 @@ export default function CalendarPage() {
     if (view === 'week') {
       setCurrentDate((d) => (direction > 0 ? addWeeks(d, 1) : subWeeks(d, 1)))
     } else {
-      setCurrentDate((d) => (direction > 0 ? addMonths(d, 1) : subMonths(d, 1)))
+      // Navigate by BS month
+      if (direction > 0) {
+        const next = nextBSMonth(bsYear, bsMonth)
+        setBsYear(next.year)
+        setBsMonth(next.month)
+      } else {
+        const prev = prevBSMonth(bsYear, bsMonth)
+        setBsYear(prev.year)
+        setBsMonth(prev.month)
+      }
     }
   }
 
-  const goToday = () => setCurrentDate(new Date())
+  const goToday = () => {
+    setCurrentDate(new Date())
+    const today = getBSComponents(new Date())
+    setBsYear(today.year)
+    setBsMonth(today.month)
+  }
 
   const resetForm = () => {
     setFormTitle('')
@@ -245,6 +273,7 @@ export default function CalendarPage() {
     setSubmitting(false)
   }
 
+  // Week view days
   const days = useMemo(() => eachDayOfInterval(dateRange), [dateRange])
 
   const entriesByDate = useMemo(() => {
@@ -267,20 +296,27 @@ export default function CalendarPage() {
     return map
   }, [workLogs])
 
-  // Month view: build full calendar grid with padding
+  // Month view: build full calendar grid with padding for BS month
   const monthGrid = useMemo(() => {
     if (view !== 'month') return []
-    const monthStart = startOfMonth(currentDate)
-    const monthEnd = endOfMonth(currentDate)
+    const monthStart = getADDateForBSMonthStart(bsYear, bsMonth)
+    const monthEnd = getADDateForBSMonthEnd(bsYear, bsMonth)
+    // Pad to full weeks (Mon start)
     const calStart = startOfWeek(monthStart, { weekStartsOn: 1 })
     const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 })
     return eachDayOfInterval({ start: calStart, end: calEnd })
-  }, [currentDate, view])
+  }, [bsYear, bsMonth, view])
 
-  const headerLabel =
-    view === 'week'
-      ? `${format(dateRange.start, 'MMM d')} - ${format(dateRange.end, 'MMM d, yyyy')}`
-      : format(currentDate, 'MMMM yyyy')
+  // Header label in BS
+  const headerLabel = useMemo(() => {
+    if (view === 'week') {
+      const start = startOfWeek(currentDate, { weekStartsOn: 1 })
+      const end = endOfWeek(currentDate, { weekStartsOn: 1 })
+      return formatBSWeekRange(start, end)
+    } else {
+      return `${BS_MONTHS[bsMonth]} ${bsYear}`
+    }
+  }, [view, currentDate, bsYear, bsMonth])
 
   const getContentTypeLabel = (val: string) =>
     CONTENT_TYPES.find((c) => c.value === val)?.label || val
@@ -337,7 +373,7 @@ export default function CalendarPage() {
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-sm font-medium text-gray-700 min-w-[180px] text-center">
+          <span className="text-sm font-medium text-gray-700 min-w-[220px] text-center">
             {headerLabel}
           </span>
           <button
@@ -603,6 +639,7 @@ export default function CalendarPage() {
               const dayEntries = entriesByDate[key] || []
               const dayWorkLogs = workLogsByDate[key] || []
               const today = isToday(day)
+              const bsDay = getBSDay(day)
 
               return (
                 <div
@@ -626,7 +663,7 @@ export default function CalendarPage() {
                           : ''
                       }`}
                     >
-                      {format(day, 'd')}
+                      {bsDay}
                     </span>
                   </div>
                   <div className="space-y-1">
@@ -708,6 +745,8 @@ export default function CalendarPage() {
               const today = isToday(day)
               const isExpanded = expandedMobileDay === key
               const itemCount = dayEntries.length + dayWorkLogs.length
+              const bsDay = getBSDay(day)
+              const bsMonthName = BS_MONTHS[getBSComponents(day).month]
 
               return (
                 <div
@@ -730,7 +769,7 @@ export default function CalendarPage() {
                           today ? 'text-blue-700' : 'text-gray-700'
                         }`}
                       >
-                        {format(day, 'EEE, MMM d')}
+                        {DAY_LABELS[getDay(day) === 0 ? 6 : getDay(day) - 1]}, {bsMonthName} {bsDay}
                       </span>
                       {today && (
                         <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-medium">
@@ -839,8 +878,9 @@ export default function CalendarPage() {
               const key = format(day, 'yyyy-MM-dd')
               const dayEntries = entriesByDate[key] || []
               const today = isToday(day)
-              const inMonth = isSameMonth(day, currentDate)
+              const inMonth = isSameBSMonth(day, getADDateForBSMonthStart(bsYear, bsMonth))
               const isSelected = selectedDay === key
+              const bsDay = getBSDay(day)
 
               return (
                 <button
@@ -865,7 +905,7 @@ export default function CalendarPage() {
                           : 'text-gray-300'
                     }`}
                   >
-                    {format(day, 'd')}
+                    {bsDay}
                   </span>
                   {dayEntries.length > 0 && (
                     <div className="mt-1 space-y-0.5">
@@ -895,7 +935,7 @@ export default function CalendarPage() {
           {selectedDay && (
             <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
               <h3 className="font-semibold text-sm text-gray-700 mb-3">
-                {format(parseISO(selectedDay), 'EEEE, MMMM d, yyyy')}
+                {formatBSDayDetail(parseISO(selectedDay))}
               </h3>
               {(entriesByDate[selectedDay]?.length || 0) === 0 &&
               (workLogsByDate[selectedDay]?.length || 0) === 0 ? (
