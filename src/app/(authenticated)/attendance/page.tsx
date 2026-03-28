@@ -10,6 +10,9 @@ import {
   parseISO,
   isSameDay,
   isToday,
+  isFuture,
+  isPast,
+  startOfDay,
 } from 'date-fns'
 import {
   CalendarCheck,
@@ -63,6 +66,15 @@ export default function AttendancePage() {
         setMemberId(member.id)
         setMemberName(member.name)
         setIsAdmin(member.is_admin)
+
+        // Clean up: remove "present" records from past dates
+        const today = format(new Date(), 'yyyy-MM-dd')
+        await supabase
+          .from('attendance')
+          .delete()
+          .eq('team_member_id', member.id)
+          .eq('status', 'present')
+          .lt('date', today)
       }
     }
     init()
@@ -220,11 +232,17 @@ export default function AttendancePage() {
     setPinging(null)
   }
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+
   const changeDate = (days: number) => {
     const d = parseISO(date)
     d.setDate(d.getDate() + days)
+    // Don't allow navigating to future dates
+    if (isFuture(startOfDay(d))) return
     setDate(format(d, 'yyyy-MM-dd'))
   }
+
+  const isDateInPast = !isToday(parseISO(date)) && isPast(startOfDay(parseISO(date)))
 
   // Monthly stats
   const present = monthRecords.filter(r => r.status === 'present').length
@@ -258,10 +276,19 @@ export default function AttendancePage() {
           <input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            max={todayStr}
+            onChange={(e) => {
+              const val = e.target.value
+              if (val > todayStr) return
+              setDate(val)
+            }}
             className="text-sm border-none outline-none bg-transparent w-32 text-center"
           />
-          <button onClick={() => changeDate(1)} className="p-1 hover:bg-gray-100 rounded">
+          <button
+            onClick={() => changeDate(1)}
+            disabled={isToday(parseISO(date))}
+            className="p-1 hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+          >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -351,7 +378,7 @@ export default function AttendancePage() {
             </div>
           )}
 
-          {/* Non-today date view */}
+          {/* Non-today date view (read-only for past dates) */}
           {!isViewingToday && (
             <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
               <div className="flex items-center gap-2 mb-3">
@@ -375,22 +402,9 @@ export default function AttendancePage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-4 gap-2">
-                {(Object.entries(STATUS_CONFIG) as [string, typeof STATUS_CONFIG.present][]).map(([key, config]) => (
-                  <button
-                    key={key}
-                    onClick={() => markAttendance(key)}
-                    disabled={saving}
-                    className={`py-2.5 rounded-lg text-xs font-medium transition border ${
-                      todayStatus?.status === key
-                        ? config.color + ' border-current'
-                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-                    }`}
-                  >
-                    {config.label}
-                  </button>
-                ))}
-              </div>
+              {!todayStatus && (
+                <p className="text-xs text-gray-400 text-center py-2">No attendance record for this date</p>
+              )}
             </div>
           )}
 
@@ -436,16 +450,20 @@ export default function AttendancePage() {
                 const record = monthRecords.find(r => isSameDay(parseISO(r.date), day))
                 const isSelected = isSameDay(day, parseISO(date))
                 const isDayToday = isToday(day)
+                const isFutureDay = isFuture(startOfDay(day))
                 return (
                   <button
                     key={day.toISOString()}
-                    onClick={() => setDate(format(day, 'yyyy-MM-dd'))}
+                    onClick={() => !isFutureDay && setDate(format(day, 'yyyy-MM-dd'))}
+                    disabled={isFutureDay}
                     className={`relative py-1.5 rounded-lg text-xs ${
-                      isSelected
-                        ? 'bg-blue-100 font-bold text-blue-700'
-                        : isDayToday
-                          ? 'bg-gray-100 font-semibold'
-                          : 'hover:bg-gray-50'
+                      isFutureDay
+                        ? 'text-gray-300 cursor-not-allowed'
+                        : isSelected
+                          ? 'bg-blue-100 font-bold text-blue-700'
+                          : isDayToday
+                            ? 'bg-gray-100 font-semibold'
+                            : 'hover:bg-gray-50'
                     }`}
                   >
                     {format(day, 'd')}
