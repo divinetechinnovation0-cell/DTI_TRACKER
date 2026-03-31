@@ -363,6 +363,7 @@ export default function CalendarPage() {
           <button
             onClick={() => {
               resetForm()
+              if (selectedDay) setFormDate(selectedDay)
               setEditingEntryId(null)
               setShowForm(true)
             }}
@@ -566,6 +567,11 @@ export default function CalendarPage() {
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {formDate && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    {formatBSDayDetail(parseISO(formDate))}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -902,7 +908,11 @@ export default function CalendarPage() {
               return (
                 <button
                   key={key}
-                  onClick={() => setSelectedDay(isSelected ? null : key)}
+                  onClick={() => {
+                    const newDay = isSelected ? null : key
+                    setSelectedDay(newDay)
+                    if (newDay) setFormDate(newDay)
+                  }}
                   className={`rounded-lg border p-1.5 min-h-[70px] md:min-h-[90px] text-left transition overflow-hidden ${
                     isSelected
                       ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-200'
