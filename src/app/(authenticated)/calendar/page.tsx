@@ -97,7 +97,7 @@ export default function CalendarPage() {
   // Form state
   const [formTitle, setFormTitle] = useState('')
   const [formClientId, setFormClientId] = useState('')
-  const [formContentTypes, setFormContentTypes] = useState<string[]>([])
+  const [formContentType, setFormContentType] = useState('')
   const [formPlatforms, setFormPlatforms] = useState<string[]>([])
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [formTime, setFormTime] = useState('')
@@ -218,7 +218,7 @@ export default function CalendarPage() {
   const resetForm = () => {
     setFormTitle('')
     setFormClientId('')
-    setFormContentTypes([])
+    setFormContentType('')
     setFormPlatforms([])
     setFormDate(format(new Date(), 'yyyy-MM-dd'))
     setFormTime('')
@@ -229,7 +229,7 @@ export default function CalendarPage() {
   const startEditEntry = (entry: ContentEntry) => {
     setFormTitle(entry.title)
     setFormClientId(entry.client_id)
-    setFormContentTypes(entry.content_type ? entry.content_type.split(',') : [])
+    setFormContentType(entry.content_type)
     setFormPlatforms(entry.platform ? entry.platform.split(',') : [])
     setFormDate(entry.scheduled_date)
     setFormTime(entry.scheduled_time || '')
@@ -252,13 +252,13 @@ export default function CalendarPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formClientId || !formTitle || formContentTypes.length === 0) return
+    if (!formClientId || !formTitle || !formContentType) return
     setSubmitting(true)
 
     const payload: Record<string, unknown> = {
       client_id: formClientId,
       title: formTitle,
-      content_type: formContentTypes.join(','),
+      content_type: formContentType,
       scheduled_date: formDate,
       description: formDescription || '',
       platform: formPlatforms.length > 0 ? formPlatforms.join(',') : null,
@@ -268,12 +268,14 @@ export default function CalendarPage() {
 
     if (editingEntryId) {
       const { error } = await supabase.from('content_calendar').update(payload).eq('id', editingEntryId)
-      if (!error) { resetForm(); setEditingEntryId(null); setShowForm(false); fetchData() }
+      if (error) console.error('Update error:', error)
+      else { resetForm(); setEditingEntryId(null); setShowForm(false); fetchData() }
     } else {
       if (memberId) payload.created_by = memberId
       payload.status = 'planned'
       const { error } = await supabase.from('content_calendar').insert(payload)
-      if (!error) { resetForm(); setShowForm(false); fetchData() }
+      if (error) console.error('Insert error:', error)
+      else { resetForm(); setShowForm(false); fetchData() }
     }
     setSubmitting(false)
   }
@@ -324,7 +326,7 @@ export default function CalendarPage() {
   }, [view, currentDate, bsYear, bsMonth])
 
   const getContentTypeLabel = (val: string) =>
-    val.split(',').map((v) => CONTENT_TYPES.find((c) => c.value === v.trim())?.label || v.trim()).join(', ')
+    CONTENT_TYPES.find((c) => c.value === val)?.label || val
 
   const getPlatformLabel = (val: string) =>
     val.split(',').map((v) => PLATFORMS.find((p) => p.value === v.trim())?.label || v.trim()).join(', ')
@@ -496,35 +498,26 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Content type chips (multi-select) */}
+            {/* Content type chips */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Content Type <span className="text-red-500">*</span>
               </label>
               <div className="flex flex-wrap gap-2">
-                {CONTENT_TYPES.map((ct) => {
-                  const selected = formContentTypes.includes(ct.value)
-                  return (
-                    <button
-                      key={ct.value}
-                      type="button"
-                      onClick={() =>
-                        setFormContentTypes((prev) =>
-                          selected
-                            ? prev.filter((v) => v !== ct.value)
-                            : [...prev, ct.value]
-                        )
-                      }
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                        selected
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {ct.label}
-                    </button>
-                  )
-                })}
+                {CONTENT_TYPES.map((ct) => (
+                  <button
+                    key={ct.value}
+                    type="button"
+                    onClick={() => setFormContentType(formContentType === ct.value ? '' : ct.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                      formContentType === ct.value
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {ct.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -639,7 +632,7 @@ export default function CalendarPage() {
               </button>
               <button
                 type="submit"
-                disabled={submitting || !formClientId || formContentTypes.length === 0}
+                disabled={submitting || !formClientId || !formContentType}
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50"
               >
                 {submitting ? 'Saving...' : editingEntryId ? 'Update Entry' : 'Add Entry'}
