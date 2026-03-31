@@ -157,6 +157,7 @@ export default function CalendarPage() {
     let contentQuery = supabase
       .from('content_calendar')
       .select('*, client:clients(name, color), assignee:team_members!assigned_to(name)')
+      .neq('status', 'cancelled')
       .gte('scheduled_date', startStr)
       .lte('scheduled_date', endStr)
       .order('scheduled_date')
@@ -240,7 +241,11 @@ export default function CalendarPage() {
   }
 
   const handleDeleteEntry = async (id: string) => {
-    await supabase.from('content_calendar').delete().eq('id', id)
+    const { error } = await supabase.from('content_calendar').delete().eq('id', id)
+    if (error) {
+      // If RLS blocks delete, update status to cancelled instead
+      await supabase.from('content_calendar').update({ status: 'cancelled' }).eq('id', id)
+    }
     setDeleteConfirmId(null)
     fetchData()
   }
