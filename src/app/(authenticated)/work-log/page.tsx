@@ -6,6 +6,7 @@ import { format, parseISO, subDays } from 'date-fns'
 import { Plus, Trash2, Clock, ChevronLeft, ChevronRight, Copy, Check, MessageSquare } from 'lucide-react'
 import { SERVICE_CATEGORIES, WORK_TYPES, getCategoryLabel } from '@/lib/types'
 import type { WorkLog, Client } from '@/lib/types'
+import { formatNepaliDayMonth, formatNepaliShortDate } from '@/lib/nepali-date'
 
 type QuickTemplate = {
   client_id: string | null
@@ -323,7 +324,7 @@ export default function WorkLogPage() {
         <div className="flex items-center gap-2">
           <Clock className="w-5 h-5 text-blue-200" />
           <span className="text-sm font-medium text-blue-100">
-            {format(parseISO(date), 'EEEE, MMM d')}
+            {formatNepaliDayMonth(parseISO(date))}
           </span>
         </div>
         <span className="text-2xl font-bold">{totalHours}h</span>
@@ -580,7 +581,7 @@ export default function WorkLogPage() {
       <div>
         {logs.length > 0 && (
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
-            {format(parseISO(date), 'MMM d')} — {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
+            {formatNepaliShortDate(parseISO(date))} — {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
           </p>
         )}
         <div className="space-y-2">

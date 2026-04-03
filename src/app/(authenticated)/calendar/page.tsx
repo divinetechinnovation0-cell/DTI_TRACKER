@@ -34,6 +34,14 @@ import {
 } from 'lucide-react'
 import type { ContentCalendar, Client, TeamMember } from '@/lib/types'
 import { CONTENT_TYPES, PLATFORMS } from '@/lib/types'
+import {
+  formatNepaliMonthYear,
+  formatNepaliDateRange,
+  formatNepaliDay,
+  formatNepaliWeekDay,
+  formatNepaliFullDate,
+  NEPALI_DAYS_SHORT,
+} from '@/lib/nepali-date'
 
 type ContentEntry = ContentCalendar & {
   client?: { name: string; color?: string }
@@ -50,7 +58,7 @@ type WorkLogEntry = {
   client?: { name: string; color?: string }
 }
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DAY_LABELS = ['सोम', 'मंगल', 'बुध', 'बिही', 'शुक्र', 'शनि', 'आइत']
 
 function getInitials(name: string) {
   return name
@@ -279,8 +287,8 @@ export default function CalendarPage() {
 
   const headerLabel =
     view === 'week'
-      ? `${format(dateRange.start, 'MMM d')} - ${format(dateRange.end, 'MMM d, yyyy')}`
-      : format(currentDate, 'MMMM yyyy')
+      ? formatNepaliDateRange(dateRange.start, dateRange.end)
+      : formatNepaliMonthYear(currentDate)
 
   const getContentTypeLabel = (val: string) =>
     CONTENT_TYPES.find((c) => c.value === val)?.label || val
@@ -626,7 +634,7 @@ export default function CalendarPage() {
                           : ''
                       }`}
                     >
-                      {format(day, 'd')}
+                      {formatNepaliDay(day)}
                     </span>
                   </div>
                   <div className="space-y-1">
@@ -730,7 +738,7 @@ export default function CalendarPage() {
                           today ? 'text-blue-700' : 'text-gray-700'
                         }`}
                       >
-                        {format(day, 'EEE, MMM d')}
+                        {formatNepaliWeekDay(day)}
                       </span>
                       {today && (
                         <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-medium">
@@ -865,7 +873,7 @@ export default function CalendarPage() {
                           : 'text-gray-300'
                     }`}
                   >
-                    {format(day, 'd')}
+                    {formatNepaliDay(day)}
                   </span>
                   {dayEntries.length > 0 && (
                     <div className="mt-1 space-y-0.5">
@@ -895,7 +903,7 @@ export default function CalendarPage() {
           {selectedDay && (
             <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
               <h3 className="font-semibold text-sm text-gray-700 mb-3">
-                {format(parseISO(selectedDay), 'EEEE, MMMM d, yyyy')}
+                {formatNepaliFullDate(parseISO(selectedDay))}
               </h3>
               {(entriesByDate[selectedDay]?.length || 0) === 0 &&
               (workLogsByDate[selectedDay]?.length || 0) === 0 ? (

@@ -26,6 +26,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import type { Task, Client, TeamMember } from '@/lib/types'
+import { formatNepaliShortDate } from '@/lib/nepali-date'
 
 type Tab = 'my' | 'all' | 'weekly'
 
@@ -288,7 +289,7 @@ export default function TasksPage() {
               <span className={`text-xs ${
                 !isDone && isBefore(parseISO(task.due_date), now) ? 'text-red-500 font-medium' : 'text-gray-400'
               }`}>
-                {format(parseISO(task.due_date), 'MMM d')}
+                {formatNepaliShortDate(parseISO(task.due_date))}
               </span>
             )}
             {task.client && (

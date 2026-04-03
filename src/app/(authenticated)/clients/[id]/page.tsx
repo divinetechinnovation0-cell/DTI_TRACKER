@@ -12,6 +12,10 @@ import {
   subDays,
 } from 'date-fns'
 import {
+  formatNepaliShortDate,
+  formatNepaliDateWithYear,
+} from '@/lib/nepali-date'
+import {
   ArrowLeft,
   Clock,
   DollarSign,
@@ -566,8 +570,8 @@ export default function ClientDetailPage() {
               >
                 <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b border-gray-100">
                   <span className="text-xs font-medium text-gray-500">
-                    Week of{' '}
-                    {format(parseISO(weekStart), 'MMM d, yyyy')}
+                    हप्ता{' '}
+                    {formatNepaliDateWithYear(parseISO(weekStart))}
                   </span>
                   <span className="text-xs font-bold text-blue-600">
                     {totalHours.toFixed(1)}h
@@ -590,7 +594,7 @@ export default function ClientDetailPage() {
                             {log.hours}h
                           </span>
                           <span className="text-xs text-gray-400">
-                            {format(parseISO(log.date), 'MMM d')}
+                            {formatNepaliShortDate(parseISO(log.date))}
                           </span>
                         </div>
                       </div>
@@ -785,7 +789,7 @@ export default function ClientDetailPage() {
                     <div className="flex items-center gap-2">
                       {del.due_date && (
                         <span className="text-xs text-gray-400">
-                          Due {format(parseISO(del.due_date), 'MMM d')}
+                          म्याद {formatNepaliShortDate(parseISO(del.due_date))}
                         </span>
                       )}
                       {isAdmin && (
@@ -844,7 +848,7 @@ export default function ClientDetailPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">
-                        {format(parseISO(exp.date), 'MMM d, yyyy')}
+                        {formatNepaliDateWithYear(parseISO(exp.date))}
                       </span>
                       {isAdmin && (
                         deleteConfirmExpId === exp.id ? (

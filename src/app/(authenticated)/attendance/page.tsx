@@ -23,6 +23,13 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import type { Attendance, TeamMember } from '@/lib/types'
+import {
+  formatNepaliDayMonth,
+  formatNepaliMonthYear,
+  formatNepaliDay,
+  formatNepaliTime,
+  NEPALI_DAYS_SHORT,
+} from '@/lib/nepali-date'
 
 const STATUS_CONFIG = {
   present: { label: 'Present', color: 'bg-green-100 text-green-700 border-green-300', dot: 'bg-green-500' },
@@ -279,7 +286,7 @@ export default function AttendancePage() {
                 Good morning, {memberName.split(' ')[0]}!
               </h2>
               <p className="text-sm text-gray-500 mb-6">
-                {format(new Date(), 'EEEE, MMMM d')}
+                {formatNepaliDayMonth(new Date())}
               </p>
 
               <button
@@ -315,7 +322,7 @@ export default function AttendancePage() {
               <div className="flex items-center gap-2 mb-3">
                 <CalendarCheck className="w-5 h-5 text-gray-600" />
                 <span className="text-sm font-medium">
-                  {format(new Date(), 'EEEE, MMM d')}
+                  {formatNepaliDayMonth(new Date())}
                 </span>
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_CONFIG[todayStatus.status as keyof typeof STATUS_CONFIG].color}`}>
                   {STATUS_CONFIG[todayStatus.status as keyof typeof STATUS_CONFIG].label}
@@ -326,7 +333,7 @@ export default function AttendancePage() {
                 <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg w-fit">
                   <Clock className="w-3.5 h-3.5 text-green-600" />
                   <span className="text-xs font-medium text-green-700">
-                    Checked in at {format(parseISO(todayStatus.check_in_time), 'h:mm a')}
+                    चेक इन: {formatNepaliTime(parseISO(todayStatus.check_in_time))}
                   </span>
                 </div>
               )}
@@ -357,7 +364,7 @@ export default function AttendancePage() {
               <div className="flex items-center gap-2 mb-3">
                 <CalendarCheck className="w-5 h-5 text-gray-600" />
                 <span className="text-sm font-medium">
-                  {format(parseISO(date), 'EEEE, MMM d')}
+                  {formatNepaliDayMonth(parseISO(date))}
                 </span>
                 {todayStatus && (
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_CONFIG[todayStatus.status as keyof typeof STATUS_CONFIG].color}`}>
@@ -370,7 +377,7 @@ export default function AttendancePage() {
                 <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg w-fit">
                   <Clock className="w-3.5 h-3.5 text-green-600" />
                   <span className="text-xs font-medium text-green-700">
-                    Checked in at {format(parseISO(todayStatus.check_in_time), 'h:mm a')}
+                    चेक इन: {formatNepaliTime(parseISO(todayStatus.check_in_time))}
                   </span>
                 </div>
               )}
@@ -397,7 +404,7 @@ export default function AttendancePage() {
           {/* Monthly summary */}
           <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
             <h2 className="text-sm font-semibold mb-3">
-              {format(selectedDate, 'MMMM yyyy')} Summary
+              {formatNepaliMonthYear(selectedDate)} सारांश
             </h2>
             <div className="grid grid-cols-5 gap-2 text-center">
               <div className="bg-green-50 rounded-lg p-2">
@@ -426,7 +433,7 @@ export default function AttendancePage() {
           {/* Mini calendar */}
           <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
             <div className="grid grid-cols-7 gap-1 text-center">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+              {['आ', 'सो', 'मं', 'बु', 'बि', 'शु', 'श'].map((d, i) => (
                 <div key={i} className="text-xs font-medium text-gray-400 py-1">{d}</div>
               ))}
               {Array.from({ length: firstDayOffset }).map((_, i) => (
@@ -448,7 +455,7 @@ export default function AttendancePage() {
                           : 'hover:bg-gray-50'
                     }`}
                   >
-                    {format(day, 'd')}
+                    {formatNepaliDay(day)}
                     {record && (
                       <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[record.status as keyof typeof STATUS_CONFIG].dot}`} />
                     )}
@@ -507,7 +514,7 @@ export default function AttendancePage() {
                                 </span>
                                 {att?.check_in_time && (
                                   <span className="text-xs text-gray-400">
-                                    {format(parseISO(att.check_in_time), 'h:mm a')}
+                                    {formatNepaliTime(parseISO(att.check_in_time))}
                                   </span>
                                 )}
                               </>

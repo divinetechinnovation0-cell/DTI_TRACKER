@@ -6,6 +6,7 @@ import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import { Plus, Trash2, Receipt, ChevronLeft, ChevronRight } from 'lucide-react'
 import { EXPENSE_CATEGORIES, COST_TYPES } from '@/lib/types'
 import type { Expense, Client } from '@/lib/types'
+import { formatNepaliMonthYear, formatNepaliDateWithYear } from '@/lib/nepali-date'
 
 export default function ExpensesPage() {
   const supabase = createClient()
@@ -125,7 +126,7 @@ export default function ExpensesPage() {
           <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-100 rounded">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm font-medium w-28 text-center">{format(month, 'MMM yyyy')}</span>
+          <span className="text-sm font-medium w-32 text-center">{formatNepaliMonthYear(month)}</span>
           <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-100 rounded">
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -301,7 +302,7 @@ export default function ExpensesPage() {
                   {exp.description && (
                     <p className="text-sm text-gray-500">{exp.description}</p>
                   )}
-                  <p className="text-xs text-gray-400 mt-1">{format(parseISO(exp.date), 'MMM d, yyyy')}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatNepaliDateWithYear(parseISO(exp.date))}</p>
                 </div>
                 <button
                   onClick={() => handleDelete(exp.id)}

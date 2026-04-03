@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
-  formatDistanceToNow,
   parseISO,
 } from 'date-fns'
+import { formatNepaliRelativeTime } from '@/lib/nepali-date'
 import {
   Bell,
   CheckSquare,
@@ -136,7 +136,7 @@ export default function NotificationsPage() {
 
   const getRelativeTime = (dateStr: string) => {
     try {
-      return formatDistanceToNow(parseISO(dateStr), { addSuffix: true })
+      return formatNepaliRelativeTime(parseISO(dateStr))
     } catch {
       return ''
     }

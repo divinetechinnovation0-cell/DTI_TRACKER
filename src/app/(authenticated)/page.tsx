@@ -4,12 +4,18 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, isAf
 import { Clock, Receipt, Building2, Users, ArrowRight, AlertTriangle, Zap, CalendarCheck } from 'lucide-react'
 import Link from 'next/link'
 import { fmtNPR, getCategoryLabel } from '@/lib/types'
+import {
+  formatNepaliFullDate,
+  formatNepaliMonthYear,
+  formatNepaliShortDate,
+  formatNepaliTime,
+} from '@/lib/nepali-date'
 
 function getGreeting(): string {
   const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
+  if (hour < 12) return 'शुभ बिहानी'
+  if (hour < 17) return 'शुभ दिउँसो'
+  return 'शुभ साँझ'
 }
 
 export default async function DashboardPage() {
@@ -130,14 +136,14 @@ export default async function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
             {greeting}, {firstName}
           </h1>
-          <p className="text-gray-500 text-sm mt-1">{format(now, 'EEEE, MMMM d, yyyy')}</p>
+          <p className="text-gray-500 text-sm mt-1">{formatNepaliFullDate(now)}</p>
         </div>
 
         {/* Today's Pulse */}
         <div className="rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 border border-blue-200/60 p-5">
           <h2 className="text-sm font-semibold text-indigo-800 uppercase tracking-wide mb-4 flex items-center gap-2">
             <Zap className="w-4 h-4" />
-            Today&apos;s Pulse
+            आजको स्थिति
           </h2>
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white/80 backdrop-blur rounded-xl p-4 text-center">
@@ -180,7 +186,7 @@ export default async function DashboardPage() {
               <span className="text-xs text-gray-500 font-medium">Team Hours</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">{totalHours}h</div>
-            <div className="text-xs text-gray-400 mt-1">{format(now, 'MMM yyyy')}</div>
+            <div className="text-xs text-gray-400 mt-1">{formatNepaliMonthYear(now)}</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -188,7 +194,7 @@ export default async function DashboardPage() {
               <span className="text-xs text-gray-500 font-medium">Total Expenses</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">{fmtNPR(totalExpenses)}</div>
-            <div className="text-xs text-gray-400 mt-1">{format(now, 'MMM yyyy')}</div>
+            <div className="text-xs text-gray-400 mt-1">{formatNepaliMonthYear(now)}</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -209,7 +215,7 @@ export default async function DashboardPage() {
         {/* Client Costs Table */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-900">Client Costs &mdash; {format(now, 'MMM yyyy')}</h2>
+            <h2 className="font-semibold text-gray-900">क्लाइन्ट लागत &mdash; {formatNepaliMonthYear(now)}</h2>
             <Link href="/clients" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
               View all <ArrowRight className="w-3 h-3" />
             </Link>
@@ -294,7 +300,7 @@ export default async function DashboardPage() {
                     {log.hours}h
                   </span>
                   <span className="text-xs text-gray-400 shrink-0 hidden md:inline">
-                    {format(new Date(log.created_at), 'h:mm a')}
+                    {formatNepaliTime(new Date(log.created_at))}
                   </span>
                 </div>
               ))}
@@ -394,7 +400,7 @@ export default async function DashboardPage() {
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
           {greeting}, {firstName}
         </h1>
-        <p className="text-gray-500 text-sm mt-1">{format(now, 'EEEE, MMMM d, yyyy')}</p>
+        <p className="text-gray-500 text-sm mt-1">{formatNepaliFullDate(now)}</p>
       </div>
 
       {/* Quick Actions */}
@@ -504,7 +510,7 @@ export default async function DashboardPage() {
                     </span>
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">
-                    {getCategoryLabel(log.service_category)} &middot; {format(new Date(log.date), 'MMM d')}
+                    {getCategoryLabel(log.service_category)} &middot; {formatNepaliShortDate(new Date(log.date))}
                   </div>
                 </div>
                 <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium shrink-0 ml-3">
