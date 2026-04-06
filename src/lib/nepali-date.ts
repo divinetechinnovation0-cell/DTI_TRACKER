@@ -1,13 +1,15 @@
 import NepaliDate from 'nepali-date-converter'
 
+// ─── Constants ──────────────────────────────────────────────
+
 const NEPALI_MONTHS = [
   'बैशाख', 'जेठ', 'असार', 'श्रावण', 'भदौ', 'असोज',
   'कार्तिक', 'मंसिर', 'पुष', 'माघ', 'फागुन', 'चैत्र'
 ]
 
-const NEPALI_MONTHS_SHORT = [
-  'बैशाख', 'जेठ', 'असार', 'श्रावण', 'भदौ', 'असोज',
-  'कार्तिक', 'मंसिर', 'पुष', 'माघ', 'फागुन', 'चैत्र'
+const BS_MONTHS = [
+  'Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
+  'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra',
 ]
 
 const NEPALI_DAYS = [
@@ -18,7 +20,11 @@ const NEPALI_DAYS_SHORT = [
   'आइत', 'सोम', 'मंगल', 'बुध', 'बिही', 'शुक्र', 'शनि'
 ]
 
+const BS_DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
 const NEPALI_DIGITS = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९']
+
+// ─── Core helpers ───────────────────────────────────────────
 
 function toNepaliDigits(num: number | string): string {
   return String(num).replace(/[0-9]/g, (d) => NEPALI_DIGITS[parseInt(d)])
@@ -29,9 +35,6 @@ function toNepaliDate(date: Date | string): NepaliDate {
   return new NepaliDate(d)
 }
 
-/**
- * Get BS date parts from a JS Date or ISO string
- */
 function getBSParts(date: Date | string) {
   const nd = toNepaliDate(date)
   const bs = nd.getBS()
@@ -44,13 +47,77 @@ function getBSParts(date: Date | string) {
   }
 }
 
-// ============================================================
-// Public formatting functions — drop-in replacements for format()
-// ============================================================
+// ─── BS Component utilities (from remote) ───────────────────
+
+/** Convert a JS Date (AD) to NepaliDate (BS) */
+export function adToBS(date: Date): NepaliDate {
+  return new NepaliDate(date)
+}
+
+/** Convert a yyyy-MM-dd AD string to NepaliDate */
+export function adStringToBS(dateStr: string): NepaliDate {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new NepaliDate(new Date(y, m - 1, d))
+}
+
+/** Get BS year, month (0-indexed), day from a JS Date */
+export function getBSComponents(date: Date): { year: number; month: number; day: number } {
+  const nd = new NepaliDate(date)
+  return { year: nd.getYear(), month: nd.getMonth(), day: nd.getDate() }
+}
+
+/** Get the BS day number for a given AD date */
+export function getBSDay(date: Date): number {
+  return new NepaliDate(date).getDate()
+}
+
+/** Get number of days in a BS month */
+export function getBSDaysInMonth(bsYear: number, bsMonth: number): number {
+  let nextMonth = bsMonth + 1
+  let nextYear = bsYear
+  if (nextMonth > 11) {
+    nextMonth = 0
+    nextYear++
+  }
+  const nextMonthStart = new NepaliDate(nextYear, nextMonth, 1).toJsDate()
+  const lastDay = new Date(nextMonthStart.getTime() - 86400000)
+  return new NepaliDate(lastDay).getDate()
+}
+
+/** Get the AD Date for the 1st day of a BS month */
+export function getADDateForBSMonthStart(bsYear: number, bsMonth: number): Date {
+  return new NepaliDate(bsYear, bsMonth, 1).toJsDate()
+}
+
+/** Get the AD Date for the last day of a BS month */
+export function getADDateForBSMonthEnd(bsYear: number, bsMonth: number): Date {
+  const daysInMonth = getBSDaysInMonth(bsYear, bsMonth)
+  return new NepaliDate(bsYear, bsMonth, daysInMonth).toJsDate()
+}
+
+/** Navigate to next BS month */
+export function nextBSMonth(bsYear: number, bsMonth: number): { year: number; month: number } {
+  if (bsMonth >= 11) return { year: bsYear + 1, month: 0 }
+  return { year: bsYear, month: bsMonth + 1 }
+}
+
+/** Navigate to previous BS month */
+export function prevBSMonth(bsYear: number, bsMonth: number): { year: number; month: number } {
+  if (bsMonth <= 0) return { year: bsYear - 1, month: 11 }
+  return { year: bsYear, month: bsMonth - 1 }
+}
+
+/** Check if two dates fall in the same BS month */
+export function isSameBSMonth(date1: Date, date2: Date): boolean {
+  const bs1 = getBSComponents(date1)
+  const bs2 = getBSComponents(date2)
+  return bs1.year === bs2.year && bs1.month === bs2.month
+}
+
+// ─── Devanagari formatting functions ────────────────────────
 
 /**
  * "बिहीबार, चैत्र १९, २०८२" — full date with day name
- * Replaces: format(date, 'EEEE, MMMM d, yyyy')
  */
 export function formatNepaliFullDate(date: Date | string): string {
   const p = getBSParts(date)
@@ -59,7 +126,6 @@ export function formatNepaliFullDate(date: Date | string): string {
 
 /**
  * "बिहीबार, चैत्र १९" — day name + month + date (no year)
- * Replaces: format(date, 'EEEE, MMM d')
  */
 export function formatNepaliDayMonth(date: Date | string): string {
   const p = getBSParts(date)
@@ -68,7 +134,6 @@ export function formatNepaliDayMonth(date: Date | string): string {
 
 /**
  * "चैत्र १९" — month + date
- * Replaces: format(date, 'MMM d')
  */
 export function formatNepaliShortDate(date: Date | string): string {
   const p = getBSParts(date)
@@ -77,7 +142,6 @@ export function formatNepaliShortDate(date: Date | string): string {
 
 /**
  * "चैत्र १९, २०८२" — month + date + year
- * Replaces: format(date, 'MMM d, yyyy')
  */
 export function formatNepaliDateWithYear(date: Date | string): string {
   const p = getBSParts(date)
@@ -86,7 +150,6 @@ export function formatNepaliDateWithYear(date: Date | string): string {
 
 /**
  * "चैत्र २०८२" — month + year
- * Replaces: format(date, 'MMMM yyyy') or format(date, 'MMM yyyy')
  */
 export function formatNepaliMonthYear(date: Date | string): string {
   const p = getBSParts(date)
@@ -94,8 +157,7 @@ export function formatNepaliMonthYear(date: Date | string): string {
 }
 
 /**
- * "१९" — just the date number
- * Replaces: format(day, 'd')
+ * "१९" — just the date number in Devanagari
  */
 export function formatNepaliDay(date: Date | string): string {
   const p = getBSParts(date)
@@ -104,7 +166,6 @@ export function formatNepaliDay(date: Date | string): string {
 
 /**
  * "सोम, चैत्र १९" — short day name + month + date (week view)
- * Replaces: format(day, 'EEE, MMM d')
  */
 export function formatNepaliWeekDay(date: Date | string): string {
   const p = getBSParts(date)
@@ -124,8 +185,7 @@ export function formatNepaliDateRange(start: Date | string, end: Date | string):
 }
 
 /**
- * Format time in Nepali digits — "३:४५ PM"
- * Replaces: format(date, 'h:mm a')
+ * Format time in Nepali — "३:४५ बेलुका"
  */
 export function formatNepaliTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
@@ -139,7 +199,6 @@ export function formatNepaliTime(date: Date | string): string {
 
 /**
  * Relative time in Nepali — "५ मिनेट अगाडि"
- * Replaces: formatDistanceToNow()
  */
 export function formatNepaliRelativeTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
@@ -160,34 +219,46 @@ export function formatNepaliRelativeTime(date: Date | string): string {
   return `${toNepaliDigits(diffYear)} वर्ष अगाडि`
 }
 
-/**
- * Convert Nepali digits back to English for data operations
- */
+// ─── Aliases used by remote code (English-style names) ──────
+
+/** "15 Falgun 2082" — English month name format (kept for backward compat) */
+export function formatBSFull(date: Date): string {
+  return formatNepaliFullDate(date)
+}
+
+/** "Falgun 2082" — English month name format (kept for backward compat) */
+export function formatBSMonthYear(date: Date): string {
+  return formatNepaliMonthYear(date)
+}
+
+/** Week range in Nepali */
+export function formatBSWeekRange(start: Date, end: Date): string {
+  return formatNepaliDateRange(start, end)
+}
+
+/** Selected day detail in Nepali */
+export function formatBSDayDetail(date: Date): string {
+  return formatNepaliFullDate(date)
+}
+
+// ─── Misc utilities ─────────────────────────────────────────
+
 export function toEnglishDigits(str: string): string {
   return str.replace(/[०-९]/g, (d) => String('०१२३४५६७८९'.indexOf(d)))
 }
 
-/**
- * Get Nepali month name by 0-indexed month number
- */
 export function getNepaliMonthName(month: number): string {
   return NEPALI_MONTHS[month]
 }
 
-/**
- * Get Nepali day name (short) by day number (0=Sun)
- */
 export function getNepaliDayShort(day: number): string {
   return NEPALI_DAYS_SHORT[day]
 }
 
-/**
- * Check if two dates fall in the same BS month
- */
 export function isSameNepaliMonth(date1: Date | string, date2: Date | string): boolean {
   const p1 = getBSParts(date1)
   const p2 = getBSParts(date2)
   return p1.year === p2.year && p1.month === p2.month
 }
 
-export { toNepaliDigits, toNepaliDate, getBSParts, NEPALI_MONTHS, NEPALI_DAYS, NEPALI_DAYS_SHORT }
+export { toNepaliDigits, toNepaliDate, getBSParts, NEPALI_MONTHS, NEPALI_DAYS, NEPALI_DAYS_SHORT, BS_MONTHS, BS_DAYS_SHORT }

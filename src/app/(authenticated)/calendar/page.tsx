@@ -4,20 +4,15 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   format,
-  parseISO,
   startOfWeek,
   endOfWeek,
-  startOfMonth,
-  endOfMonth,
-  addWeeks,
-  subWeeks,
-  addMonths,
-  subMonths,
   eachDayOfInterval,
   isSameDay,
   isToday,
   getDay,
-  isSameMonth,
+  addWeeks,
+  subWeeks,
+  parseISO,
 } from 'date-fns'
 import {
   Plus,
@@ -35,12 +30,19 @@ import {
 import type { ContentCalendar, Client, TeamMember } from '@/lib/types'
 import { CONTENT_TYPES, PLATFORMS } from '@/lib/types'
 import {
-  formatNepaliMonthYear,
-  formatNepaliDateRange,
+  getBSComponents,
+  getBSDaysInMonth,
+  getADDateForBSMonthStart,
+  getADDateForBSMonthEnd,
+  nextBSMonth,
+  prevBSMonth,
+  isSameBSMonth,
+  formatBSWeekRange,
+  formatBSDayDetail,
   formatNepaliDay,
   formatNepaliWeekDay,
-  formatNepaliFullDate,
-  NEPALI_DAYS_SHORT,
+  NEPALI_MONTHS,
+  toNepaliDigits,
 } from '@/lib/nepali-date'
 
 type ContentEntry = ContentCalendar & {
@@ -90,11 +92,15 @@ export default function CalendarPage() {
   )
   const [memberId, setMemberId] = useState<string | null>(null)
 
+  // BS month/year for month view navigation
+  const [bsYear, setBsYear] = useState(() => getBSComponents(new Date()).year)
+  const [bsMonth, setBsMonth] = useState(() => getBSComponents(new Date()).month)
+
   // Form state
   const [formTitle, setFormTitle] = useState('')
   const [formClientId, setFormClientId] = useState('')
   const [formContentType, setFormContentType] = useState('')
-  const [formPlatform, setFormPlatform] = useState('')
+  const [formPlatforms, setFormPlatforms] = useState<string[]>([])
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [formTime, setFormTime] = useState('')
   const [formAssignedTo, setFormAssignedTo] = useState('')
@@ -131,17 +137,19 @@ export default function CalendarPage() {
     init()
   }, [])
 
+  // Date range for data fetching
   const dateRange = useMemo(() => {
     if (view === 'week') {
       const start = startOfWeek(currentDate, { weekStartsOn: 1 })
       const end = endOfWeek(currentDate, { weekStartsOn: 1 })
       return { start, end }
     } else {
-      const start = startOfMonth(currentDate)
-      const end = endOfMonth(currentDate)
+      // For BS month view, get the AD range covering the full BS month
+      const start = getADDateForBSMonthStart(bsYear, bsMonth)
+      const end = getADDateForBSMonthEnd(bsYear, bsMonth)
       return { start, end }
     }
-  }, [currentDate, view])
+  }, [currentDate, view, bsYear, bsMonth])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -151,6 +159,7 @@ export default function CalendarPage() {
     let contentQuery = supabase
       .from('content_calendar')
       .select('*, client:clients(name, color), assignee:team_members!assigned_to(name)')
+      .neq('status', 'cancelled')
       .gte('scheduled_date', startStr)
       .lte('scheduled_date', endStr)
       .order('scheduled_date')
@@ -188,17 +197,31 @@ export default function CalendarPage() {
     if (view === 'week') {
       setCurrentDate((d) => (direction > 0 ? addWeeks(d, 1) : subWeeks(d, 1)))
     } else {
-      setCurrentDate((d) => (direction > 0 ? addMonths(d, 1) : subMonths(d, 1)))
+      // Navigate by BS month
+      if (direction > 0) {
+        const next = nextBSMonth(bsYear, bsMonth)
+        setBsYear(next.year)
+        setBsMonth(next.month)
+      } else {
+        const prev = prevBSMonth(bsYear, bsMonth)
+        setBsYear(prev.year)
+        setBsMonth(prev.month)
+      }
     }
   }
 
-  const goToday = () => setCurrentDate(new Date())
+  const goToday = () => {
+    setCurrentDate(new Date())
+    const today = getBSComponents(new Date())
+    setBsYear(today.year)
+    setBsMonth(today.month)
+  }
 
   const resetForm = () => {
     setFormTitle('')
     setFormClientId('')
     setFormContentType('')
-    setFormPlatform('')
+    setFormPlatforms([])
     setFormDate(format(new Date(), 'yyyy-MM-dd'))
     setFormTime('')
     setFormAssignedTo('')
@@ -209,7 +232,7 @@ export default function CalendarPage() {
     setFormTitle(entry.title)
     setFormClientId(entry.client_id)
     setFormContentType(entry.content_type)
-    setFormPlatform(entry.platform || '')
+    setFormPlatforms(entry.platform ? entry.platform.split(',') : [])
     setFormDate(entry.scheduled_date)
     setFormTime(entry.scheduled_time || '')
     setFormAssignedTo(entry.assigned_to || '')
@@ -220,7 +243,11 @@ export default function CalendarPage() {
   }
 
   const handleDeleteEntry = async (id: string) => {
-    await supabase.from('content_calendar').delete().eq('id', id)
+    const { error } = await supabase.from('content_calendar').delete().eq('id', id)
+    if (error) {
+      // If RLS blocks delete, update status to cancelled instead
+      await supabase.from('content_calendar').update({ status: 'cancelled' }).eq('id', id)
+    }
     setDeleteConfirmId(null)
     fetchData()
   }
@@ -236,23 +263,26 @@ export default function CalendarPage() {
       content_type: formContentType,
       scheduled_date: formDate,
       description: formDescription || '',
-      platform: formPlatform || null,
+      platform: formPlatforms.length > 0 ? formPlatforms.join(',') : null,
       scheduled_time: formTime || null,
       assigned_to: formAssignedTo || null,
     }
 
     if (editingEntryId) {
       const { error } = await supabase.from('content_calendar').update(payload).eq('id', editingEntryId)
-      if (!error) { resetForm(); setEditingEntryId(null); setShowForm(false); fetchData() }
+      if (error) console.error('Update error:', error)
+      else { resetForm(); setEditingEntryId(null); setShowForm(false); fetchData() }
     } else {
       if (memberId) payload.created_by = memberId
       payload.status = 'planned'
       const { error } = await supabase.from('content_calendar').insert(payload)
-      if (!error) { resetForm(); setShowForm(false); fetchData() }
+      if (error) console.error('Insert error:', error)
+      else { resetForm(); setShowForm(false); fetchData() }
     }
     setSubmitting(false)
   }
 
+  // Week view days
   const days = useMemo(() => eachDayOfInterval(dateRange), [dateRange])
 
   const entriesByDate = useMemo(() => {
@@ -275,23 +305,33 @@ export default function CalendarPage() {
     return map
   }, [workLogs])
 
-  // Month view: build full calendar grid with padding
+  // Month view: build full calendar grid with padding for BS month
   const monthGrid = useMemo(() => {
     if (view !== 'month') return []
-    const monthStart = startOfMonth(currentDate)
-    const monthEnd = endOfMonth(currentDate)
+    const monthStart = getADDateForBSMonthStart(bsYear, bsMonth)
+    const monthEnd = getADDateForBSMonthEnd(bsYear, bsMonth)
+    // Pad to full weeks (Mon start)
     const calStart = startOfWeek(monthStart, { weekStartsOn: 1 })
     const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 })
     return eachDayOfInterval({ start: calStart, end: calEnd })
-  }, [currentDate, view])
+  }, [bsYear, bsMonth, view])
 
-  const headerLabel =
-    view === 'week'
-      ? formatNepaliDateRange(dateRange.start, dateRange.end)
-      : formatNepaliMonthYear(currentDate)
+  // Header label in BS
+  const headerLabel = useMemo(() => {
+    if (view === 'week') {
+      const start = startOfWeek(currentDate, { weekStartsOn: 1 })
+      const end = endOfWeek(currentDate, { weekStartsOn: 1 })
+      return formatBSWeekRange(start, end)
+    } else {
+      return `${NEPALI_MONTHS[bsMonth]} ${toNepaliDigits(bsYear)}`
+    }
+  }, [view, currentDate, bsYear, bsMonth])
 
   const getContentTypeLabel = (val: string) =>
     CONTENT_TYPES.find((c) => c.value === val)?.label || val
+
+  const getPlatformLabel = (val: string) =>
+    val.split(',').map((v) => PLATFORMS.find((p) => p.value === v.trim())?.label || v.trim()).join(', ')
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -325,6 +365,7 @@ export default function CalendarPage() {
           <button
             onClick={() => {
               resetForm()
+              if (selectedDay) setFormDate(selectedDay)
               setEditingEntryId(null)
               setShowForm(true)
             }}
@@ -345,7 +386,7 @@ export default function CalendarPage() {
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-sm font-medium text-gray-700 min-w-[180px] text-center">
+          <span className="text-sm font-medium text-gray-700 min-w-[220px] text-center">
             {headerLabel}
           </span>
           <button
@@ -470,7 +511,7 @@ export default function CalendarPage() {
                   <button
                     key={ct.value}
                     type="button"
-                    onClick={() => setFormContentType(ct.value)}
+                    onClick={() => setFormContentType(formContentType === ct.value ? '' : ct.value)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
                       formContentType === ct.value
                         ? 'bg-blue-600 text-white'
@@ -483,28 +524,35 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Platform chips */}
+            {/* Platform chips (multi-select) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Platform (optional)
               </label>
               <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map((p) => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={() =>
-                      setFormPlatform(formPlatform === p.value ? '' : p.value)
-                    }
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                      formPlatform === p.value
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+                {PLATFORMS.map((p) => {
+                  const selected = formPlatforms.includes(p.value)
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() =>
+                        setFormPlatforms((prev) =>
+                          selected
+                            ? prev.filter((v) => v !== p.value)
+                            : [...prev, p.value]
+                        )
+                      }
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                        selected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -521,6 +569,11 @@ export default function CalendarPage() {
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {formDate && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    {formatBSDayDetail(parseISO(formDate))}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -611,6 +664,7 @@ export default function CalendarPage() {
               const dayEntries = entriesByDate[key] || []
               const dayWorkLogs = workLogsByDate[key] || []
               const today = isToday(day)
+
 
               return (
                 <div
@@ -847,13 +901,18 @@ export default function CalendarPage() {
               const key = format(day, 'yyyy-MM-dd')
               const dayEntries = entriesByDate[key] || []
               const today = isToday(day)
-              const inMonth = isSameMonth(day, currentDate)
+              const inMonth = isSameBSMonth(day, getADDateForBSMonthStart(bsYear, bsMonth))
               const isSelected = selectedDay === key
+
 
               return (
                 <button
                   key={key}
-                  onClick={() => setSelectedDay(isSelected ? null : key)}
+                  onClick={() => {
+                    const newDay = isSelected ? null : key
+                    setSelectedDay(newDay)
+                    if (newDay) setFormDate(newDay)
+                  }}
                   className={`rounded-lg border p-1.5 min-h-[70px] md:min-h-[90px] text-left transition overflow-hidden ${
                     isSelected
                       ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-200'
@@ -903,7 +962,7 @@ export default function CalendarPage() {
           {selectedDay && (
             <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
               <h3 className="font-semibold text-sm text-gray-700 mb-3">
-                {formatNepaliFullDate(parseISO(selectedDay))}
+                {formatBSDayDetail(parseISO(selectedDay))}
               </h3>
               {(entriesByDate[selectedDay]?.length || 0) === 0 &&
               (workLogsByDate[selectedDay]?.length || 0) === 0 ? (
@@ -933,9 +992,7 @@ export default function CalendarPage() {
                             </span>
                             {entry.platform && (
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded">
-                                {PLATFORMS.find(
-                                  (p) => p.value === entry.platform
-                                )?.label || entry.platform}
+                                {getPlatformLabel(entry.platform)}
                               </span>
                             )}
                             {entry.assignee?.name && (
