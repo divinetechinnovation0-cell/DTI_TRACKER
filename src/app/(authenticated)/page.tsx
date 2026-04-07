@@ -7,9 +7,9 @@ import { fmtNPR, getCategoryLabel } from '@/lib/types'
 import {
   formatNepaliFullDate,
   formatNepaliMonthYear,
-  formatNepaliShortDate,
   formatNepaliTime,
 } from '@/lib/nepali-date'
+import MemberDashboard from '@/components/member-dashboard'
 
 function getGreeting(): string {
   const hour = new Date().getHours()
@@ -76,6 +76,39 @@ export default async function DashboardPage() {
         .eq('status', 'open')
         .lt('due_date', today),
     ])
+
+    // Check for overdue urgent tasks and create notifications
+    const { data: overdueUrgent } = await supabase
+      .from('tasks')
+      .select('id, title, assigned_to, deadline_time')
+      .eq('priority', 'urgent')
+      .eq('status', 'open')
+      .not('deadline_time', 'is', null)
+      .lt('deadline_time', new Date().toISOString())
+
+    if (overdueUrgent && overdueUrgent.length > 0) {
+      for (const task of overdueUrgent) {
+        const { data: existingNotif } = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('task_id', task.id)
+          .eq('type', 'reminder')
+          .gte('created_at', task.deadline_time!)
+          .limit(1)
+
+        if (!existingNotif || existingNotif.length === 0) {
+          await supabase.from('notifications').insert({
+            recipient_id: task.assigned_to,
+            type: 'reminder',
+            title: 'Urgent task overdue!',
+            body: `"${task.title}" is past its deadline`,
+            task_id: task.id,
+            link: '/tasks',
+            is_read: false,
+          })
+        }
+      }
+    }
 
     const allMembers = teamMembers || []
     const totalTeam = allMembers.length
@@ -321,6 +354,8 @@ export default async function DashboardPage() {
     { data: recentLogs },
     { data: weekLogs },
     { data: streakLogs },
+    { data: tasks },
+    { data: weeklyGoalTasks },
   ] = await Promise.all([
     supabase
       .from('work_logs')
@@ -352,6 +387,18 @@ export default async function DashboardPage() {
       .eq('team_member_id', member.id)
       .order('date', { ascending: false })
       .limit(90),
+    supabase
+      .from('tasks')
+      .select('*, assignee:team_members!assigned_to(name), assigner:team_members!assigned_by(name), client:clients(name, color)')
+      .eq('assigned_to', member.id)
+      .eq('status', 'open'),
+    supabase
+      .from('tasks')
+      .select('*, assignee:team_members!assigned_to(name), assigner:team_members!assigned_by(name), client:clients(name, color)')
+      .eq('assigned_to', member.id)
+      .eq('is_weekly_goal', true)
+      .gte('due_date', weekStart)
+      .lte('due_date', weekEnd),
   ])
 
   // Personal stats
@@ -375,7 +422,6 @@ export default async function DashboardPage() {
   let streak = 0
   if (streakLogs && streakLogs.length > 0) {
     const uniqueDates = [...new Set(streakLogs.map(l => l.date))].sort().reverse()
-    // Check if today or yesterday is the most recent log day
     const mostRecent = uniqueDates[0]
     const yesterday = format(subDays(now, 1), 'yyyy-MM-dd')
     if (mostRecent === today || mostRecent === yesterday) {
@@ -394,133 +440,20 @@ export default async function DashboardPage() {
   const weekTotalHours = (weekLogs || []).reduce((s, l) => s + Number(l.hours), 0)
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
-      {/* Greeting */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-          {greeting}, {firstName}
-        </h1>
-        <p className="text-gray-500 text-sm mt-1">{formatNepaliFullDate(now)}</p>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          href="/work-log"
-          className="bg-blue-600 text-white rounded-xl p-5 text-center hover:bg-blue-700 transition-colors active:scale-[0.98] flex flex-col items-center gap-2"
-        >
-          <Clock className="w-7 h-7" />
-          <span className="font-semibold">Log Work</span>
-        </Link>
-        <Link
-          href="/attendance"
-          className="bg-green-600 text-white rounded-xl p-5 text-center hover:bg-green-700 transition-colors active:scale-[0.98] flex flex-col items-center gap-2"
-        >
-          <CalendarCheck className="w-7 h-7" />
-          <span className="font-semibold">Mark Attendance</span>
-        </Link>
-      </div>
-
-      {/* Personal Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <div className="text-2xl font-bold text-blue-700">{myTotalHours}h</div>
-          <div className="text-xs text-gray-500 font-medium mt-1">Hours this month</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <div className="text-2xl font-bold text-green-700">{presentDays}d</div>
-          <div className="text-xs text-gray-500 font-medium mt-1">Days present</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <div className="text-2xl font-bold text-purple-700">{attendanceRate}%</div>
-          <div className="text-xs text-gray-500 font-medium mt-1">Attendance rate</div>
-        </div>
-      </div>
-
-      {/* Logging Streak */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200/60 p-4 flex items-center gap-4">
-        <div className="bg-amber-100 rounded-full p-3">
-          <Zap className="w-6 h-6 text-amber-600" />
-        </div>
-        <div>
-          <div className="text-2xl font-bold text-amber-800">
-            {streak} {streak === 1 ? 'day' : 'days'}
-          </div>
-          <div className="text-xs text-amber-700 font-medium">
-            {streak > 0 ? 'Logging streak! Keep it going.' : 'Log today to start a streak!'}
-          </div>
-        </div>
-      </div>
-
-      {/* My Week */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">My Week</h2>
-          <span className="text-xs text-gray-400 font-medium">{weekTotalHours}h total</span>
-        </div>
-        {weeklyBreakdown.length === 0 ? (
-          <p className="text-sm text-gray-400 py-2">No work logged this week yet.</p>
-        ) : (
-          <div className="space-y-2.5">
-            {weeklyBreakdown.map(({ category, hours }) => {
-              const pct = weekTotalHours > 0 ? Math.round((hours / weekTotalHours) * 100) : 0
-              return (
-                <div key={category}>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-gray-700 font-medium">{getCategoryLabel(category)}</span>
-                    <span className="text-gray-500">{hours}h <span className="text-gray-400">({pct}%)</span></span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 rounded-full h-2 transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Recent Work */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">Recent Work</h2>
-          <Link href="/work-log" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-            View all <ArrowRight className="w-3 h-3" />
-          </Link>
-        </div>
-        {(recentLogs || []).length === 0 ? (
-          <p className="text-sm text-gray-400 py-2">No work logged yet. Start by logging your first entry!</p>
-        ) : (
-          <div className="space-y-2">
-            {(recentLogs || []).map((log) => (
-              <div key={log.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
-                    {(log.client as unknown as { color?: string })?.color && (
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: (log.client as unknown as { color: string }).color }}
-                      />
-                    )}
-                    <span className="truncate">
-                      {(log.client as unknown as { name: string })?.name || 'Internal'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    {getCategoryLabel(log.service_category)} &middot; {formatNepaliShortDate(new Date(log.date))}
-                  </div>
-                </div>
-                <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium shrink-0 ml-3">
-                  {log.hours}h
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <MemberDashboard
+      memberId={member.id}
+      firstName={firstName}
+      greeting={greeting}
+      now={now.toISOString()}
+      myTotalHours={myTotalHours}
+      presentDays={presentDays}
+      attendanceRate={attendanceRate}
+      streak={streak}
+      weekTotalHours={weekTotalHours}
+      weeklyBreakdown={weeklyBreakdown}
+      recentLogs={recentLogs || []}
+      tasks={tasks || []}
+      weeklyGoalTasks={weeklyGoalTasks || []}
+    />
   )
 }

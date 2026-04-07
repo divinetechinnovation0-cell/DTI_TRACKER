@@ -12,10 +12,6 @@ import {
   subDays,
 } from 'date-fns'
 import {
-  formatNepaliShortDate,
-  formatNepaliDateWithYear,
-} from '@/lib/nepali-date'
-import {
   ArrowLeft,
   Clock,
   DollarSign,
@@ -28,6 +24,8 @@ import {
   Check,
   Trash2,
   ChevronDown,
+  Circle,
+  CheckCircle2,
 } from 'lucide-react'
 import Link from 'next/link'
 import type {
@@ -43,6 +41,7 @@ import {
   SERVICE_CATEGORIES,
   DELIVERABLE_STATUSES,
 } from '@/lib/types'
+import { formatNepaliShortDate } from '@/lib/nepali-date'
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
@@ -77,7 +76,7 @@ type ExpenseWithRecorder = Expense & {
   recorder?: { name: string }
 }
 
-type Tab = 'worklog' | 'deliverables' | 'expenses' | 'packages'
+type Tab = 'worklog' | 'deliverables' | 'expenses' | 'packages' | 'tasks'
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -95,6 +94,7 @@ export default function ClientDetailPage() {
   const [deliverables, setDeliverables] = useState<DeliverableWithAssignee[]>([])
   const [expenses, setExpenses] = useState<ExpenseWithRecorder[]>([])
   const [packages, setPackages] = useState<ClientPackage[]>([])
+  const [clientTasks, setClientTasks] = useState<any[]>([])
   const [members, setMembers] = useState<{ id: string; name: string }[]>([])
 
   // Stats
@@ -202,6 +202,16 @@ export default function ClientDetailPage() {
     if (data) setPackages(data)
   }, [clientId])
 
+  const fetchClientTasks = useCallback(async () => {
+    const { data: taskData } = await supabase
+      .from('tasks')
+      .select('*, assignee:team_members!assigned_to(name), assigner:team_members!assigned_by(name)')
+      .eq('client_id', clientId)
+      .order('status', { ascending: true })
+      .order('due_date', { ascending: true, nullsFirst: false })
+    if (taskData) setClientTasks(taskData)
+  }, [clientId])
+
   const computeStats = useCallback(async () => {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
     const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd')
@@ -255,6 +265,7 @@ export default function ClientDetailPage() {
         fetchDeliverables(),
         fetchExpenses(),
         fetchPackages(),
+        fetchClientTasks(),
         computeStats(),
       ])
       setLoading(false)
@@ -266,6 +277,7 @@ export default function ClientDetailPage() {
     fetchDeliverables,
     fetchExpenses,
     fetchPackages,
+    fetchClientTasks,
     computeStats,
   ])
 
@@ -420,6 +432,15 @@ export default function ClientDetailPage() {
     setSubmitting(false)
   }
 
+  const toggleClientTask = async (task: any) => {
+    const newStatus = task.status === 'done' ? 'open' : 'done'
+    await supabase.from('tasks').update({
+      status: newStatus,
+      completed_at: newStatus === 'done' ? new Date().toISOString() : null,
+    }).eq('id', task.id)
+    setClientTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus, completed_at: newStatus === 'done' ? new Date().toISOString() : null } : t))
+  }
+
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto">
@@ -451,6 +472,7 @@ export default function ClientDetailPage() {
     { key: 'deliverables', label: 'Deliverables' },
     { key: 'expenses', label: 'Expenses' },
     { key: 'packages', label: 'Packages' },
+    { key: 'tasks', label: 'Tasks' },
   ]
 
   return (
@@ -570,8 +592,8 @@ export default function ClientDetailPage() {
               >
                 <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b border-gray-100">
                   <span className="text-xs font-medium text-gray-500">
-                    हप्ता{' '}
-                    {formatNepaliDateWithYear(parseISO(weekStart))}
+                    Week of{' '}
+                    {format(parseISO(weekStart), 'MMM d, yyyy')}
                   </span>
                   <span className="text-xs font-bold text-blue-600">
                     {totalHours.toFixed(1)}h
@@ -594,7 +616,7 @@ export default function ClientDetailPage() {
                             {log.hours}h
                           </span>
                           <span className="text-xs text-gray-400">
-                            {formatNepaliShortDate(parseISO(log.date))}
+                            {format(parseISO(log.date), 'MMM d')}
                           </span>
                         </div>
                       </div>
@@ -789,7 +811,7 @@ export default function ClientDetailPage() {
                     <div className="flex items-center gap-2">
                       {del.due_date && (
                         <span className="text-xs text-gray-400">
-                          म्याद {formatNepaliShortDate(parseISO(del.due_date))}
+                          Due {format(parseISO(del.due_date), 'MMM d')}
                         </span>
                       )}
                       {isAdmin && (
@@ -848,7 +870,7 @@ export default function ClientDetailPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">
-                        {formatNepaliDateWithYear(parseISO(exp.date))}
+                        {format(parseISO(exp.date), 'MMM d, yyyy')}
                       </span>
                       {isAdmin && (
                         deleteConfirmExpId === exp.id ? (
@@ -1130,6 +1152,57 @@ export default function ClientDetailPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB: Tasks */}
+      {activeTab === 'tasks' && (
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Left: Active Packages */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Monthly Packages</h3>
+            {packages.filter(p => p.is_active).length === 0 ? (
+              <p className="text-sm text-gray-400">No active packages</p>
+            ) : (
+              <div className="space-y-3">
+                {packages.filter(p => p.is_active).map(pkg => (
+                  <div key={pkg.id} className="border border-gray-100 rounded-lg p-3">
+                    <div className="font-medium text-sm text-gray-900">{getCategoryLabel(pkg.service_category)}</div>
+                    <div className="text-xs text-gray-500 mt-1">{pkg.quantity_promised} {pkg.unit} · {fmtNPR(pkg.price_npr)}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{BILLING_LABELS[pkg.billing_cycle] || pkg.billing_cycle}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Right: Tasks */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Tasks</h3>
+            {clientTasks.length === 0 ? (
+              <p className="text-sm text-gray-400">No tasks for this client</p>
+            ) : (
+              <div className="space-y-2">
+                {clientTasks.map(task => {
+                  const isDone = task.status === 'done'
+                  return (
+                    <div key={task.id} className={`flex items-start gap-3 p-2 rounded-lg border border-gray-100 ${isDone ? 'opacity-60' : ''}`}>
+                      <button onClick={() => toggleClientTask(task)} className="mt-0.5 flex-shrink-0">
+                        {isDone ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 text-gray-300 hover:text-blue-400 transition" />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${isDone ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {task.assignee && <span className="text-xs text-gray-500">{task.assignee.name}</span>}
+                          {task.due_date && <span className="text-xs text-gray-400">{formatNepaliShortDate(parseISO(task.due_date))}</span>}
+                          {task.priority === 'urgent' && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">Urgent</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -12,6 +12,10 @@ import {
   addWeeks,
   startOfDay,
   isWithinInterval,
+  eachDayOfInterval,
+  isSameDay,
+  isToday,
+  getDay,
 } from 'date-fns'
 import {
   Plus,
@@ -24,9 +28,18 @@ import {
   Users,
   Pencil,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
+import {
+  formatNepaliTime,
+  formatNepaliDay,
+  formatNepaliWeekDay,
+  formatNepaliDateRange,
+  NEPALI_DAYS_SHORT,
+  toNepaliDigits,
+} from '@/lib/nepali-date'
 import type { Task, Client, TeamMember } from '@/lib/types'
-import { formatNepaliShortDate } from '@/lib/nepali-date'
 
 type Tab = 'my' | 'all' | 'weekly'
 
@@ -50,6 +63,7 @@ export default function TasksPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [goalWeekOffset, setGoalWeekOffset] = useState(0)
 
   // Form state
   const [formTitle, setFormTitle] = useState('')
@@ -57,6 +71,7 @@ export default function TasksPage() {
   const [formDueDate, setFormDueDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [formClientId, setFormClientId] = useState('')
   const [formPriority, setFormPriority] = useState<'normal' | 'urgent'>('normal')
+  const [formDeadlineTime, setFormDeadlineTime] = useState('')
   const [formIsWeeklyGoal, setFormIsWeeklyGoal] = useState(false)
 
   useEffect(() => {
@@ -107,19 +122,20 @@ export default function TasksPage() {
     if (tab === 'my') {
       query = query.eq('assigned_to', memberId)
     } else if (tab === 'weekly') {
-      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      const weekEnd = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      const goalWeekBase = addWeeks(new Date(), goalWeekOffset)
+      const gWeekStart = format(startOfWeek(goalWeekBase, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      const gWeekEnd = format(endOfWeek(goalWeekBase, { weekStartsOn: 1 }), 'yyyy-MM-dd')
       query = query
         .eq('is_weekly_goal', true)
-        .gte('due_date', weekStart)
-        .lte('due_date', weekEnd)
+        .gte('due_date', gWeekStart)
+        .lte('due_date', gWeekEnd)
     }
 
     const { data } = await query
 
     if (data) setTasks(data as unknown as TaskWithJoins[])
     setLoading(false)
-  }, [memberId, tab])
+  }, [memberId, tab, goalWeekOffset])
 
   useEffect(() => {
     fetchTasks()
@@ -138,6 +154,20 @@ export default function TasksPage() {
       .update(updates)
       .eq('id', task.id)
 
+    // Notify assigner when task is completed
+    if (newStatus === 'done' && task.assigned_by && task.assigned_by !== memberId) {
+      await supabase.from('notifications').insert({
+        recipient_id: task.assigned_by,
+        sender_id: memberId,
+        type: 'task_done',
+        title: 'Task completed',
+        body: `Task completed: ${task.title}`,
+        task_id: task.id,
+        link: '/tasks',
+        is_read: false,
+      })
+    }
+
     setTasks(prev =>
       prev.map(t =>
         t.id === task.id
@@ -154,6 +184,7 @@ export default function TasksPage() {
     setFormDueDate(format(new Date(), 'yyyy-MM-dd'))
     setFormClientId('')
     setFormPriority('normal')
+    setFormDeadlineTime('')
     setFormIsWeeklyGoal(false)
     setEditingTaskId(null)
     setShowForm(false)
@@ -165,6 +196,7 @@ export default function TasksPage() {
     setFormDueDate(task.due_date || format(new Date(), 'yyyy-MM-dd'))
     setFormClientId(task.client_id || '')
     setFormPriority(task.priority as 'normal' | 'urgent')
+    setFormDeadlineTime(task.deadline_time ? format(new Date(task.deadline_time), "yyyy-MM-dd'T'HH:mm") : '')
     setFormIsWeeklyGoal(task.is_weekly_goal || false)
     setEditingTaskId(task.id)
     setShowForm(true)
@@ -192,6 +224,7 @@ export default function TasksPage() {
       due_date: formDueDate || null,
       client_id: formClientId || null,
       priority: formPriority,
+      deadline_time: formPriority === 'urgent' && formDeadlineTime ? new Date(formDeadlineTime).toISOString() : null,
       is_weekly_goal: formIsWeeklyGoal,
       week_start: weekStart,
     }
@@ -241,6 +274,39 @@ export default function TasksPage() {
     return { overdue, thisWeek, nextWeek, later, noDue }
   }, [tasks, now, thisWeekEnd, nextWeekStart, nextWeekEnd])
 
+  // Split "My Tasks" into sub-sections
+  const assignedToMe = useMemo(() => tasks.filter(t => t.assigned_by !== memberId), [tasks, memberId])
+  const createdByMe = useMemo(() => tasks.filter(t => t.assigned_by === memberId), [tasks, memberId])
+
+  const groupTasksByTime = useCallback((taskList: TaskWithJoins[]) => {
+    const overdue: TaskWithJoins[] = []
+    const thisWeekBucket: TaskWithJoins[] = []
+    const nextWeekBucket: TaskWithJoins[] = []
+    const later: TaskWithJoins[] = []
+    const noDue: TaskWithJoins[] = []
+
+    for (const task of taskList) {
+      if (!task.due_date) {
+        noDue.push(task)
+        continue
+      }
+      const dueDate = startOfDay(parseISO(task.due_date))
+      if (task.status !== 'done' && isBefore(dueDate, now)) {
+        overdue.push(task)
+      } else if (isWithinInterval(dueDate, { start: now, end: thisWeekEnd })) {
+        thisWeekBucket.push(task)
+      } else if (isWithinInterval(dueDate, { start: nextWeekStart, end: nextWeekEnd })) {
+        nextWeekBucket.push(task)
+      } else {
+        later.push(task)
+      }
+    }
+    return { overdue, thisWeek: thisWeekBucket, nextWeek: nextWeekBucket, later, noDue }
+  }, [now, thisWeekEnd, nextWeekStart, nextWeekEnd])
+
+  const assignedToMeGrouped = useMemo(() => groupTasksByTime(assignedToMe), [assignedToMe, groupTasksByTime])
+  const createdByMeGrouped = useMemo(() => groupTasksByTime(createdByMe), [createdByMe, groupTasksByTime])
+
   // Weekly goals stats
   const weeklyGoalTasks = tasks.filter(t => t.is_weekly_goal)
   const weeklyDone = weeklyGoalTasks.filter(t => t.status === 'done').length
@@ -289,7 +355,7 @@ export default function TasksPage() {
               <span className={`text-xs ${
                 !isDone && isBefore(parseISO(task.due_date), now) ? 'text-red-500 font-medium' : 'text-gray-400'
               }`}>
-                {formatNepaliShortDate(parseISO(task.due_date))}
+                {format(parseISO(task.due_date), 'MMM d')}
               </span>
             )}
             {task.client && (
@@ -306,6 +372,11 @@ export default function TasksPage() {
             )}
             {task.priority === 'urgent' && !isDone && (
               <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">Urgent</span>
+            )}
+            {task.priority === 'urgent' && !isDone && task.deadline_time && (
+              <span className="text-xs text-red-500 font-medium">
+                {formatNepaliTime(new Date(task.deadline_time))}
+              </span>
             )}
           </div>
         </div>
@@ -367,8 +438,23 @@ export default function TasksPage() {
     )
   }
 
+  function GroupedTaskSection({ title, grouped: g, color }: { title: string; grouped: ReturnType<typeof groupTasksByTime>; color: string }) {
+    const total = g.overdue.length + g.thisWeek.length + g.nextWeek.length + g.later.length + g.noDue.length
+    if (total === 0) return null
+    return (
+      <div className="mb-6">
+        <h2 className={`text-sm font-bold mb-3 ${color}`}>{title} <span className="text-gray-400 font-normal">({total})</span></h2>
+        <TaskGroup title="Overdue" tasks={g.overdue} color="text-red-600" />
+        <TaskGroup title="This Week" tasks={g.thisWeek} color="text-blue-600" />
+        <TaskGroup title="Next Week" tasks={g.nextWeek} color="text-gray-600" />
+        <TaskGroup title="Later" tasks={g.later} color="text-gray-500" />
+        <TaskGroup title="No Due Date" tasks={g.noDue} color="text-gray-400" />
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-lg mx-auto">
+    <div className={`mx-auto ${tab === 'weekly' ? 'max-w-5xl' : 'max-w-lg'}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">Tasks</h1>
@@ -403,8 +489,8 @@ export default function TasksPage() {
       {tab === 'weekly' && weeklyTotal > 0 && (
         <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-5">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-purple-900">This Week&apos;s Goals</span>
-            <span className="text-sm font-bold text-purple-700">{weeklyDone}/{weeklyTotal} done</span>
+            <span className="text-sm font-medium text-purple-900">यो हप्ताको लक्ष्य</span>
+            <span className="text-sm font-bold text-purple-700">{toNepaliDigits(weeklyDone)}/{toNepaliDigits(weeklyTotal)}</span>
           </div>
           <div className="w-full bg-purple-200 rounded-full h-2.5">
             <div
@@ -454,7 +540,7 @@ export default function TasksPage() {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    {m.name}
+                    {m.name}{m.id === memberId ? ' (Me)' : ''}
                   </button>
                 ))}
               </div>
@@ -536,6 +622,19 @@ export default function TasksPage() {
               </div>
             </div>
 
+            {/* Deadline Time for Urgent */}
+            {formPriority === 'urgent' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Deadline (date &amp; time)</label>
+                <input
+                  type="datetime-local"
+                  value={formDeadlineTime}
+                  onChange={e => setFormDeadlineTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+
             {/* Weekly Goal Checkbox */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -579,11 +678,80 @@ export default function TasksPage() {
           </p>
         </div>
       ) : tab === 'weekly' ? (
-        <div className="space-y-2">
-          {tasks.map(task => (
-            <TaskCard key={task.id} task={task} />
-          ))}
-        </div>
+        (() => {
+          const goalWeekBase = addWeeks(new Date(), goalWeekOffset)
+          const weekDays = eachDayOfInterval({ start: startOfWeek(goalWeekBase, { weekStartsOn: 1 }), end: endOfWeek(goalWeekBase, { weekStartsOn: 1 }) })
+          return (
+            <>
+              {/* Desktop calendar view */}
+              <div className="hidden md:block">
+                <div className="flex items-center justify-between mb-4">
+                  <button onClick={() => setGoalWeekOffset(o => o - 1)} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">{formatNepaliDateRange(weekDays[0], weekDays[6])}</span>
+                  <button onClick={() => setGoalWeekOffset(o => o + 1)} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-7 gap-2">
+                  {weekDays.map(day => {
+                    const dayTasks = tasks.filter(t => t.due_date && isSameDay(parseISO(t.due_date), day))
+                    const isCurrentDay = isToday(day)
+                    return (
+                      <div key={day.toISOString()} className={`rounded-xl border p-2 min-h-[120px] ${isCurrentDay ? 'border-blue-300 bg-blue-50/50' : 'border-gray-200'}`}>
+                        <div className="text-center mb-2">
+                          <div className="text-xs text-gray-500">{NEPALI_DAYS_SHORT[getDay(day) === 0 ? 6 : getDay(day) - 1]}</div>
+                          <div className={`text-sm font-bold ${isCurrentDay ? 'text-blue-600' : 'text-gray-900'}`}>{formatNepaliDay(day)}</div>
+                        </div>
+                        <div className="space-y-1">
+                          {dayTasks.map(task => (
+                            <div key={task.id} className="flex items-start gap-1">
+                              <button onClick={() => toggleTask(task)} className="mt-0.5 flex-shrink-0">
+                                {task.status === 'done' ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <Circle className="w-3.5 h-3.5 text-gray-300 hover:text-blue-400" />}
+                              </button>
+                              <span className={`text-xs truncate ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700'}`}>{task.title}</span>
+                            </div>
+                          ))}
+                          {dayTasks.length === 0 && <div className="text-xs text-gray-300 text-center">&mdash;</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Mobile view */}
+              <div className="md:hidden space-y-3">
+                <div className="flex items-center justify-between mb-4">
+                  <button onClick={() => setGoalWeekOffset(o => o - 1)} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">{formatNepaliDateRange(weekDays[0], weekDays[6])}</span>
+                  <button onClick={() => setGoalWeekOffset(o => o + 1)} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                {weekDays.map(day => {
+                  const dayTasks = tasks.filter(t => t.due_date && isSameDay(parseISO(t.due_date), day))
+                  if (dayTasks.length === 0 && !isToday(day)) return null
+                  return (
+                    <div key={day.toISOString()} className={`rounded-xl border p-3 ${isToday(day) ? 'border-blue-300 bg-blue-50/50' : 'border-gray-200'}`}>
+                      <div className="text-xs font-medium text-gray-500 mb-2">{formatNepaliWeekDay(day)}</div>
+                      <div className="space-y-2">{dayTasks.map(task => <TaskCard key={task.id} task={task} />)}</div>
+                      {dayTasks.length === 0 && <div className="text-sm text-gray-300">&mdash;</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )
+        })()
+      ) : tab === 'my' ? (
+        <>
+          {assignedToMe.length > 0 && <GroupedTaskSection title="Assigned to Me" grouped={assignedToMeGrouped} color="text-blue-600" />}
+          {createdByMe.length > 0 && <GroupedTaskSection title="Created by Me" grouped={createdByMeGrouped} color="text-gray-600" />}
+        </>
       ) : (
         <>
           <TaskGroup title="Overdue" tasks={grouped.overdue} color="text-red-600" />

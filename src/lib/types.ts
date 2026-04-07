@@ -75,6 +75,7 @@ export type Task = {
   status: 'open' | 'done'
   priority: 'normal' | 'urgent'
   due_date: string | null
+  deadline_time: string | null
   is_weekly_goal: boolean
   week_start: string | null
   completed_at: string | null
@@ -83,6 +84,15 @@ export type Task = {
   assignee?: { name: string }
   assigner?: { name: string }
   client?: { name: string; color?: string }
+}
+
+export type ChatMessage = {
+  id: string
+  sender_id: string
+  message: string
+  created_at: string
+  updated_at: string
+  sender?: { name: string }
 }
 
 export type Notification = {

@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format, parseISO, subDays } from 'date-fns'
-import { Plus, Trash2, Clock, ChevronLeft, ChevronRight, Copy, Check, MessageSquare } from 'lucide-react'
+import { Plus, Trash2, Clock, ChevronLeft, ChevronRight, Copy, Check, MessageSquare, CheckCircle2 } from 'lucide-react'
 import { SERVICE_CATEGORIES, WORK_TYPES, getCategoryLabel } from '@/lib/types'
 import type { WorkLog, Client } from '@/lib/types'
-import { formatNepaliDayMonth, formatNepaliShortDate } from '@/lib/nepali-date'
+import { formatNepaliDayMonth, formatNepaliShortDate, formatNepaliTime } from '@/lib/nepali-date'
 
 type QuickTemplate = {
   client_id: string | null
@@ -30,6 +30,7 @@ export default function WorkLogPage() {
   const [submitting, setSubmitting] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showNote, setShowNote] = useState(false)
+  const [completedTasks, setCompletedTasks] = useState<any[]>([])
 
   // Form state
   const [clientId, setClientId] = useState<string | null>(null)
@@ -99,6 +100,16 @@ export default function WorkLogPage() {
       .order('created_at', { ascending: false })
 
     if (data) setLogs(data as unknown as WorkLog[])
+
+    const { data: doneTaskData } = await supabase
+      .from('tasks')
+      .select('*, client:clients(name, color)')
+      .eq('assigned_to', memberId)
+      .eq('status', 'done')
+      .gte('completed_at', `${date}T00:00:00`)
+      .lte('completed_at', `${date}T23:59:59`)
+    if (doneTaskData) setCompletedTasks(doneTaskData)
+
     setLoading(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId, date])
@@ -634,6 +645,35 @@ export default function WorkLogPage() {
           )}
         </div>
       </div>
+
+      {/* Completed Tasks - Activity Log */}
+      {completedTasks.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mt-4">
+          <h3 className="text-sm font-semibold text-green-700 mb-3 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            पूरा भएका कार्यहरू
+          </h3>
+          <div className="space-y-2">
+            {completedTasks.map((task: any) => (
+              <div key={task.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-700">{task.title}</p>
+                  {task.client && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: task.client.color || '#9ca3af' }} />
+                      <span className="text-xs text-gray-400">{task.client.name}</span>
+                    </div>
+                  )}
+                </div>
+                {task.completed_at && (
+                  <span className="text-xs text-gray-400">{formatNepaliTime(new Date(task.completed_at))}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

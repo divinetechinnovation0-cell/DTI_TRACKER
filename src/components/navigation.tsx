@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Clock, CalendarCheck, Receipt, Users, Building2,
-  LogOut, CalendarDays, CheckSquare, Bell, Plus
+  LogOut, CalendarDays, CheckSquare, Bell, Plus, MessageCircle
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/work-log', label: 'Log', icon: Clock, highlight: true },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { href: '/chat', label: 'Chat', icon: MessageCircle },
   { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
   { href: '/expenses', label: 'Expenses', icon: Receipt },
   { href: '/clients', label: 'Clients', icon: Building2 },
@@ -66,10 +67,10 @@ export default function Navigation({ isAdmin, memberName, memberId }: {
   // Mobile: show 5 items max
   const mobileItems = [
     items.find(i => i.href === '/'),
-    items.find(i => i.href === '/calendar'),
     items.find(i => i.href === '/work-log'),
     items.find(i => i.href === '/tasks'),
-    items.find(i => i.href === '/attendance'),
+    items.find(i => i.href === '/chat'),
+    items.find(i => i.href === '/calendar'),
   ].filter(Boolean) as typeof navItems
 
   return (
